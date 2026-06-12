@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}Campaigns | Sailor{% endblock %}
+{% block page_title %}Campaigns{% endblock %}
+
+{% block content %}
+<div class="px-6 py-5">
+
+  <!-- Header -->
+  <div class="flex items-center justify-between mb-5">
+    <div>
+      <h1 class="text-base font-semibold text-slate-800">Campaigns</h1>
+      <p class="text-xs text-slate-400 mt-0.5">{{ campaigns|length }} campaign{{ campaigns|length|pluralize }}</p>
+    </div>
+    <div class="flex items-center gap-2">
+    <a href="/campaigns/templates/"
+       class="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg
+              border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-colors">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+      </svg>
+      Email Templates
+    </a>
+    <a href="/campaigns/new/"
+       class="inline-flex items-center gap-1.5 text-white text-xs font-semibold
+              px-4 py-2 rounded-lg transition-colors shadow-sm"
+       style="background:#30B9EF">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+      </svg>
+      New Campaign
+    </a>
+    </div>
+  </div>
+
+  {% if campaigns %}
+  <div class="space-y-3">
+    {% for c in campaigns %}
+    {% with sent=c.sent_count opens=c.open_count enrolled=c.enrolled_count replied=c.replied_count %}
+    <a href="/campaigns/{{ c.id }}/"
+       class="block bg-white border border-slate-200 rounded-xl px-5 py-4
+              hover:border-blue-200 hover:shadow-sm transition-all">
+      <div class="flex items-center gap-4">
+
+        <!-- Status dot -->
+        <div class="w-2.5 h-2.5 rounded-full flex-shrink-0
+          {% if c.status == 'active' %}bg-emerald-400
+          {% elif c.status == 'paused' %}bg-amber-400
+          {% elif c.status == 'completed' %}bg-slate-300
+          {% else %}bg-blue-300{% endif %}"></div>
+
+        <!-- Name + goal -->
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-semibold text-slate-800 font-mono">{{ c.name }}</p>
+          {% if c.goal %}
+          <p class="text-xs text-slate-400 mt-0.5 truncate">{{ c.goal }}</p>
+          {% endif %}
+        </div>
+
+        <!-- Stats -->
+        <div class="flex items-center gap-6 text-center flex-shrink-0">
+          <div>
+            <p class="text-sm font-bold text-slate-700">{{ enrolled }}</p>
+            <p class="text-[10px] text-slate-400">Enrolled</p>
+          </div>
+          <div>
+            <p class="text-sm font-bold text-slate-700">{{ sent }}</p>
+            <p class="text-[10px] text-slate-400">Sent</p>
+          </div>
+          <div>
+            <p class="text-sm font-bold {% if opens > 0 %}text-emerald-600{% else %}text-slate-700{% endif %}">
+              {% if sent %}{% widthratio opens sent 100 %}%{% else %}—{% endif %}
+            </p>
+            <p class="text-[10px] text-slate-400">Opened</p>
+          </div>
+          <div>
+            <p class="text-sm font-bold {% if replied > 0 %}text-sky-600{% else %}text-slate-700{% endif %}">
+              {% if enrolled %}{{ replied }}{% else %}—{% endif %}
+            </p>
+            <p class="text-[10px] text-slate-400">Replied</p>
+          </div>
+          {% if c.created_by %}
+          <div class="text-center">
+            <div class="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-bold
+                        flex items-center justify-center mx-auto" title="{{ c.created_by.display_name }}">
+              {{ c.created_by.display_name|slice:":1"|upper }}
+            </div>
+            <p class="text-[10px] text-slate-400 mt-0.5 max-w-16 truncate">{{ c.created_by.display_name }}</p>
+          </div>
+          {% endif %}
+          <div class="text-xs text-slate-400 w-20 text-right">{{ c.created_at|date:"d M Y" }}</div>
+        </div>
+
+      </div>
+    </a>
+    {% endwith %}
+    {% endfor %}
+  </div>
+
+  {% else %}
+  <div class="flex flex-col items-center justify-center py-24 text-center">
+    <div class="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mb-4">
+      <svg class="w-7 h-7 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+              d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+      </svg>
+    </div>
+    <p class="text-sm font-semibold text-slate-500">No campaigns yet</p>
+    <p class="text-xs text-slate-400 mt-1 mb-4">Select leads from the pipeline and create your first campaign</p>
+    <a href="/pipeline/" class="text-xs font-semibold text-blue-600 hover:underline">Go to Pipeline →</a>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

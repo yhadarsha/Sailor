@@ -1,0 +1,681 @@
+{% load core_tags %}
+{% comment %}
+Lead detail modal — loaded via HTMX into #modal-content.
+
+Layout:
+  Header   │ avatar + name + stage badge + ⋮ menu + close
+  Delete   │ confirm bar (hidden)
+  Body     │ left: profile info (fixed 240px, scrolls)
+           │ right: scrollable content column
+                    ├ log-activity
+                    ├ email-compose
+                    └ activity-feed
+{% endcomment %}
+
+<!-- ── Header ────────────────────────────────────────────────────────────── -->
+<div class="flex items-center justify-between px-6 pt-5 pb-4 border-b border-slate-100">
+
+  <!-- Left: avatar + name -->
+  <div class="flex items-center gap-3.5 min-w-0">
+    <div class="w-11 h-11 rounded-xl flex items-center justify-center text-white font-bold text-base flex-shrink-0"
+         style="background:#29307C">
+      {{ lead.first_name|slice:":1" }}{{ lead.last_name|slice:":1"|default:"" }}
+    </div>
+    <div class="min-w-0">
+      <h2 class="text-base font-bold text-slate-800 leading-tight truncate">
+        {{ lead.first_name }} {{ lead.last_name }}
+      </h2>
+      <p class="text-xs text-slate-400 mt-0.5 truncate">
+        {% if lead.title %}{{ lead.title }}{% endif %}
+        {% if lead.title and lead.company %} · {% endif %}
+        {% if lead.company %}{{ lead.company.name }}{% endif %}
+      </p>
+    </div>
+  </div>
+
+  <!-- Right: stage badge + ⋮ menu + close -->
+  <div class="flex items-center gap-2 flex-shrink-0 ml-4">
+
+    <div class="flex items-center gap-1">
+      {% if previous_lead_id %}
+      <button hx-get="/leads/{{ previous_lead_id }}/"
+              hx-target="#modal-content"
+              hx-swap="innerHTML"
+              class="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center
+                     justify-center text-slate-600 transition-colors"
+              title="Previous lead">
+        <span class="text-sm leading-none">^</span>
+      </button>
+      {% else %}
+      <button type="button" disabled
+              class="w-7 h-7 rounded-full bg-slate-50 flex items-center justify-center
+                     text-slate-300 cursor-not-allowed"
+              title="No previous lead">
+        <span class="text-sm leading-none">^</span>
+      </button>
+      {% endif %}
+
+      {% if next_lead_id %}
+      <button hx-get="/leads/{{ next_lead_id }}/"
+              hx-target="#modal-content"
+              hx-swap="innerHTML"
+              class="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center
+                     justify-center text-slate-600 transition-colors"
+              title="Next lead">
+        <span class="inline-block text-sm leading-none rotate-180">^</span>
+      </button>
+      {% else %}
+      <button type="button" disabled
+              class="w-7 h-7 rounded-full bg-slate-50 flex items-center justify-center
+                     text-slate-300 cursor-not-allowed"
+              title="No next lead">
+        <span class="inline-block text-sm leading-none rotate-180">^</span>
+      </button>
+      {% endif %}
+    </div>
+
+    {% if lead.current_stage %}
+    <span class="text-xs font-semibold px-3 py-1 rounded-full whitespace-nowrap"
+          style="background:#e0f5fc;color:#29307C">
+      {{ lead.current_stage.name }}
+    </span>
+    {% endif %}
+
+    <!-- ⋮ Actions menu -->
+    <div class="relative" id="lead-menu-wrap">
+      <button onclick="toggleLeadMenu(event)"
+              class="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center
+                     justify-center text-slate-500 transition-colors"
+              title="Actions">
+        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+          <circle cx="12" cy="5"  r="1.5"/>
+          <circle cx="12" cy="12" r="1.5"/>
+          <circle cx="12" cy="19" r="1.5"/>
+        </svg>
+      </button>
+
+      <!-- Dropdown -->
+      <div id="lead-actions-dropdown"
+           class="hidden absolute right-0 mt-1.5 w-52 bg-white border border-slate-200
+                  rounded-xl shadow-xl z-50 overflow-hidden"
+           style="top:100%">
+
+        <!-- Send Email -->
+        {% if lead.email %}
+        <button type="button"
+                onclick="closeLeadMenu(); toggleEmailCompose()"
+                class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-blue-600
+                       hover:bg-blue-50 transition-colors text-left">
+          <svg class="w-4 h-4 text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+          </svg>
+          Send Email
+        </button>
+        <div class="border-t border-slate-100 mx-3"></div>
+        {% endif %}
+
+        <!-- Make Call -->
+        {% if lead.phone or lead.corporate_phone %}
+        <a href="tel:{% if lead.phone %}{{ lead.phone }}{% else %}{{ lead.corporate_phone }}{% endif %}"
+           onclick="closeLeadMenu()"
+           class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-green-600
+                  hover:bg-green-50 transition-colors text-left">
+          <svg class="w-4 h-4 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M3 5a2 2 0 012-2h3.28a1 1 0 01.95.68l1.5 4.49a1 1 0 01-.5 1.21l-2.26 1.13a11.04 11.04 0 005.52 5.52l1.13-2.26a1 1 0 011.21-.5l4.49 1.5a1 1 0 01.68.95V19a2 2 0 01-2 2h-1C9.72 21 3 14.28 3 6V5z"/>
+          </svg>
+          Call on This Device
+        </a>
+        <form hx-post="/call/send/{{ lead.id }}/"
+              hx-target="#call-result"
+              hx-swap="outerHTML">
+          {% csrf_token %}
+          <button type="submit"
+                  onclick="closeLeadMenu()"
+                  class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-green-700
+                         hover:bg-green-50 transition-colors text-left">
+            <svg class="w-4 h-4 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+            </svg>
+            Send to My Phone
+          </button>
+        </form>
+        <div class="border-t border-slate-100 mx-3"></div>
+        {% endif %}
+
+        <!-- Edit Info -->
+        <button hx-get="/leads/{{ lead.id }}/edit/"
+                hx-target="#modal-content"
+                hx-swap="innerHTML"
+                onclick="closeLeadMenu()"
+                class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700
+                       hover:bg-slate-50 transition-colors text-left">
+          <svg class="w-4 h-4 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5
+                     m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+          </svg>
+          Edit Info
+        </button>
+
+        <div class="border-t border-slate-100 mx-3"></div>
+
+        <!-- Mark as Dead / Inactive -->
+        {% if not lead.current_stage.is_terminal %}
+        <form hx-post="/leads/{{ lead.id }}/mark-dead/"
+              hx-target="#modal-content"
+              hx-swap="innerHTML">
+          {% csrf_token %}
+          <button type="submit" onclick="closeLeadMenu()"
+                  class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-amber-600
+                         hover:bg-amber-50 transition-colors text-left">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636
+                       m12.728 12.728L5.636 5.636"/>
+            </svg>
+            Mark as Dead / Inactive
+          </button>
+        </form>
+        {% else %}
+        <div class="flex items-center gap-2 px-4 py-2.5 text-xs text-amber-500 bg-amber-50">
+          <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M12 9v2m0 4h.01M12 3a9 9 0 110 18A9 9 0 0112 3z"/>
+          </svg>
+          Already in terminal stage
+        </div>
+        {% endif %}
+
+        <!-- Mark as Bounced / Invalid -->
+        {% if not lead.current_stage.is_terminal %}
+        <form hx-post="/leads/{{ lead.id }}/mark-bounced/"
+              hx-target="#modal-content"
+              hx-swap="innerHTML">
+          {% csrf_token %}
+          <button type="submit" onclick="closeLeadMenu()"
+                  class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-orange-500
+                         hover:bg-orange-50 transition-colors text-left">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7
+                       a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+            </svg>
+            Mark as Bounced / Invalid
+          </button>
+        </form>
+        {% endif %}
+
+        <!-- Mark as Converted -->
+        {% if not lead.current_stage.is_terminal %}
+        <form hx-post="/leads/{{ lead.id }}/mark-converted/"
+              hx-target="#modal-content"
+              hx-swap="innerHTML">
+          {% csrf_token %}
+          <button type="submit" onclick="closeLeadMenu()"
+                  class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-green-600
+                         hover:bg-green-50 transition-colors text-left">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            Mark as Converted
+          </button>
+        </form>
+        {% endif %}
+
+        <div class="border-t border-slate-100 mx-3"></div>
+
+        <!-- Delete Lead -->
+        <button type="button"
+                onclick="closeLeadMenu(); showDeleteConfirm('{{ lead.id }}')"
+                class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-500
+                       hover:bg-red-50 transition-colors text-left">
+          <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7
+                     m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+          </svg>
+          Delete Lead
+        </button>
+
+      </div>
+    </div><!-- /menu wrap -->
+
+    <!-- Close modal -->
+    <button onclick="closeModalForced()"
+            class="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center
+                   justify-center text-slate-500 transition-colors text-lg leading-none">
+      &times;
+    </button>
+
+  </div>
+</div>
+
+<!-- ── Delete confirmation bar (hidden until triggered) ──────────────────── -->
+<div id="delete-confirm-{{ lead.id }}"
+     class="hidden items-center gap-3 px-5 py-3 bg-red-50 border-b border-red-100">
+  <svg class="w-4 h-4 text-red-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M12 9v2m0 4h.01M12 3a9 9 0 110 18A9 9 0 0112 3z"/>
+  </svg>
+  <div class="flex-1 min-w-0">
+    <p class="text-xs font-semibold text-red-700">Permanently delete this lead?</p>
+    <p class="text-xs text-red-400 mt-0.5">All stage history and activities will be lost.</p>
+  </div>
+  <button onclick="hideDeleteConfirm('{{ lead.id }}')"
+          class="text-xs px-3 py-1.5 bg-white border border-slate-200 rounded-lg
+                 text-slate-600 hover:bg-slate-50 transition-colors whitespace-nowrap">
+    Cancel
+  </button>
+  <form hx-post="/leads/{{ lead.id }}/delete/"
+        hx-swap="none"
+        data-close-modal-on-success
+        data-delete-lead-id="{{ lead.id }}"
+        style="display:inline">
+    {% csrf_token %}
+    <button type="submit"
+            class="text-xs px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white
+                   rounded-lg font-semibold transition-colors whitespace-nowrap">
+      Yes, delete
+    </button>
+  </form>
+</div>
+
+<div id="call-result" class="hidden"></div>
+
+<!-- ── Body: two panels ──────────────────────────────────────────────────── -->
+<div class="flex overflow-hidden" style="height:calc(88vh - 77px); min-height:0">
+
+  <!-- ── Left: profile info (fixed width, scrollable) ──────────────────── -->
+  <div class="flex-shrink-0 w-56 border-r border-slate-100 overflow-y-auto px-5 py-5 space-y-4 text-xs">
+
+    {% if lead.email %}
+    <div>
+      <p class="text-slate-400 font-semibold uppercase tracking-wide mb-0.5">Email</p>
+      <a href="mailto:{{ lead.email }}" class="text-blue-600 hover:underline break-all">{{ lead.email }}</a>
+      {% if lead.email_bounced %}
+      <span class="ml-1 text-red-500 font-medium">⚠ bounced</span>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {% if lead.phone %}
+    <div>
+      <p class="text-slate-400 font-semibold uppercase tracking-wide mb-0.5">Phone</p>
+      <p class="text-slate-700">{{ lead.phone }}</p>
+    </div>
+    {% endif %}
+
+    {% if lead.corporate_phone %}
+    <div>
+      <p class="text-slate-400 font-semibold uppercase tracking-wide mb-0.5">Corp. Phone</p>
+      <p class="text-slate-700">{{ lead.corporate_phone }}</p>
+    </div>
+    {% endif %}
+
+    {% if lead.linkedin_url %}
+    <div>
+      <p class="text-slate-400 font-semibold uppercase tracking-wide mb-0.5">LinkedIn</p>
+      <a href="{{ lead.linkedin_url }}" target="_blank"
+         class="text-blue-600 hover:underline truncate block">View Profile ↗</a>
+    </div>
+    {% endif %}
+
+    {% if lead.city or lead.state or lead.country %}
+    <div>
+      <p class="text-slate-400 font-semibold uppercase tracking-wide mb-0.5">Location</p>
+      <p class="text-slate-700">
+        {{ lead.city }}{% if lead.state %}, {{ lead.state }}{% endif %}{% if lead.country %} · {{ lead.country }}{% endif %}
+      </p>
+    </div>
+    {% endif %}
+
+    {% if lead.department %}
+    <div>
+      <p class="text-slate-400 font-semibold uppercase tracking-wide mb-0.5">Department</p>
+      <p class="text-slate-700">{{ lead.department }}{% if lead.sub_department %} / {{ lead.sub_department }}{% endif %}</p>
+    </div>
+    {% endif %}
+
+    {% if lead.source %}
+    <div>
+      <p class="text-slate-400 font-semibold uppercase tracking-wide mb-0.5">Source</p>
+      <p class="text-slate-700">{{ lead.source.name }}</p>
+    </div>
+    {% endif %}
+
+    {% if lead.assigned_to %}
+    <div>
+      <p class="text-slate-400 font-semibold uppercase tracking-wide mb-0.5">Assigned To</p>
+      <div class="flex items-center gap-1.5 mt-0.5">
+        <div class="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold
+                    flex items-center justify-center flex-shrink-0">
+          {{ lead.assigned_to.display_name|slice:":1"|upper }}
+        </div>
+        <span class="text-slate-700">{{ lead.assigned_to.display_name }}</span>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if stage_history %}
+    <div>
+      <p class="text-slate-400 font-semibold uppercase tracking-wide mb-1.5">Stage History</p>
+      <div class="space-y-2">
+        {% for h in stage_history %}
+        <div class="flex items-start gap-1.5">
+          <span class="w-1.5 h-1.5 rounded-full bg-slate-300 flex-shrink-0 mt-1"></span>
+          <div class="min-w-0">
+            <span class="text-slate-600">
+              {% if h.from_stage %}<span class="text-slate-400">{{ h.from_stage.name }} →</span> {% endif %}
+              <strong>{{ h.to_stage.name }}</strong>
+            </span>
+            <span class="text-slate-300 block text-[10px]">{{ h.changed_at|date:"d M, H:i" }}</span>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+  </div>
+
+  <!-- ── Right panel: one scrollable content column ─────────────────────── -->
+  <div class="flex-1 min-w-0 overflow-y-auto overflow-x-hidden lead-modal-scroll">
+
+    <!-- ── Log activity (fixed height, never shrinks) ────────────────────── -->
+    <div class="px-5 py-4 border-b border-slate-100 bg-slate-50/60">
+      <div class="flex items-center gap-2 mb-3">
+        <p class="text-xs font-bold text-slate-500 uppercase tracking-wide">Log Activity</p>
+      </div>
+
+      <form hx-post="/leads/{{ lead.id }}/log-activity/"
+            hx-target="#activity-feed"
+            hx-swap="innerHTML"
+            hx-on::after-request="this.reset()">
+        {% csrf_token %}
+
+        <div class="flex flex-wrap gap-2 mb-3">
+          {% for at in action_types %}
+          <label class="activity-type-btn cursor-pointer">
+            <input type="radio" name="action_type_id" value="{{ at.id }}"
+                   class="sr-only" required {% if forloop.first %}checked{% endif %}>
+            <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
+                         border border-slate-200 bg-white text-slate-600
+                         hover:border-blue-300 hover:text-blue-700 transition-colors">
+              {% if at.category == 'email' %}
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                </svg>
+              {% elif at.category == 'linkedin' %}
+                <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M16 8a6 6 0 016 6v7h-4v-7a2 2 0 00-2-2 2 2 0 00-2 2v7h-4v-7a6 6 0 016-6zM2 9h4v12H2z"/>
+                  <circle cx="4" cy="4" r="2"/>
+                </svg>
+              {% elif at.category == 'phone' %}
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21
+                           l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502
+                           l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
+                </svg>
+              {% else %}
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5
+                           m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                </svg>
+              {% endif %}
+              {{ at.name }}
+            </span>
+          </label>
+          {% endfor %}
+        </div>
+
+        <textarea name="note" rows="2"
+                  placeholder="Add a note (optional)…"
+                  class="w-full text-xs bg-white border border-slate-200 rounded-lg
+                         px-3 py-2 text-slate-700 resize-none mb-3
+                         focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"></textarea>
+
+        <div class="flex items-center gap-3">
+          <div class="text-xs bg-slate-50 border border-slate-200 rounded-lg
+                      px-3 py-1.5 text-slate-700">
+            {{ current_user.display_name|default:sailor_user.display_name|default:"Logged in user" }}
+          </div>
+          <button type="submit"
+                  class="ml-auto inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg
+                         text-xs font-semibold text-white transition-colors"
+                  style="background:#30B9EF">
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+            </svg>
+            Log Activity
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- ── Email compose panel (hidden, max-h capped so it can't overflow) ─ -->
+    {% if lead.email %}
+    <div id="email-compose-panel"
+         class="hidden border-b border-blue-100 bg-blue-50/40">
+
+      <div class="px-5 pt-4 pb-3">
+        <div class="flex items-center justify-between mb-3">
+          <p class="text-xs font-bold text-blue-700 uppercase tracking-wide flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+            </svg>
+            New Email
+          </p>
+          <button type="button" onclick="toggleEmailCompose()"
+                  class="text-blue-400 hover:text-blue-600 transition-colors text-lg leading-none font-light">&times;</button>
+        </div>
+
+        <!-- To (read-only) -->
+        <div class="flex items-center gap-2 mb-3 px-3 py-2 bg-white border border-slate-200 rounded-lg">
+          <span class="text-xs text-slate-400 flex-shrink-0">To:</span>
+          <span class="text-xs font-medium text-slate-700 truncate">{{ lead.email }}</span>
+        </div>
+
+        <form id="email-compose-form"
+              hx-post="/leads/{{ lead.id }}/send-email/"
+              hx-target="#email-result"
+              hx-swap="outerHTML"
+              hx-indicator="#email-spinner"
+              hx-encoding="multipart/form-data"
+              class="space-y-2">
+          {% csrf_token %}
+
+          <!-- Template picker -->
+          {% if email_templates %}
+          <div class="flex flex-wrap gap-1.5 pb-1">
+            {% for tmpl in email_templates %}
+            <button type="button"
+                    onclick="applyLeadTemplate('{{ tmpl.subject|escapejs }}', '{{ tmpl.body|escapejs }}')"
+                    class="text-[11px] font-medium px-2.5 py-1 rounded-full border border-blue-200
+                           bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors">
+              {{ tmpl.name }}
+            </button>
+            {% endfor %}
+          </div>
+          {% endif %}
+
+          <input type="text" name="subject" id="lead-email-subject" required
+                 placeholder="Subject"
+                 class="w-full text-xs bg-white border border-slate-200 rounded-lg
+                        px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-400">
+
+          <textarea name="body" id="lead-email-body" rows="4" required
+                    placeholder="Write your message…"
+                    class="w-full text-xs bg-white border border-slate-200 rounded-lg
+                           px-3 py-2 text-slate-700 resize-none
+                           focus:outline-none focus:ring-2 focus:ring-blue-400"></textarea>
+
+          <!-- Attachment picker -->
+          <label class="flex items-center gap-2 cursor-pointer group py-1">
+            <svg class="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-500 transition-colors flex-shrink-0"
+                 fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
+            </svg>
+            <span class="text-xs text-slate-400 group-hover:text-blue-500 transition-colors">
+              Attach files
+              <span class="text-slate-300 ml-1">max 5 MB each · 10 MB total</span>
+            </span>
+            <input type="file" name="attachments" multiple class="sr-only"
+                   onchange="handleAttachmentChange(this)">
+          </label>
+
+          <!-- Attachment chips -->
+          <div id="attachment-chips" class="flex flex-wrap gap-1.5 empty:hidden"></div>
+
+          <!-- Result / send row -->
+          <div id="email-result"></div>
+
+          <div class="flex items-center gap-2 pt-1">
+            <span id="email-spinner" class="htmx-indicator">
+              <svg class="w-3.5 h-3.5 animate-spin text-blue-500" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+              </svg>
+            </span>
+            <button type="submit"
+                    class="ml-auto inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg
+                           text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-colors">
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+              </svg>
+              Send
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- ── Activity feed ────────────────────────────────────────────────── -->
+    <div id="activity-feed" class="px-5 py-4">
+      {% include "pipeline/partials/activity_feed.html" with activities=activities lead=lead %}
+    </div>
+
+  </div><!-- /right panel -->
+
+</div><!-- /body -->
+
+<style>
+  .activity-type-btn input:checked + span {
+    background: #e0f5fc;
+    border-color: #30B9EF;
+    color: #29307C;
+    font-weight: 600;
+  }
+  #delete-confirm-{{ lead.id }}:not(.hidden) { display: flex !important; }
+  .lead-modal-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: #94a3b8 #f1f5f9;
+  }
+  .lead-modal-scroll::-webkit-scrollbar {
+    width: 10px;
+  }
+  .lead-modal-scroll::-webkit-scrollbar-track {
+    background: #f1f5f9;
+  }
+  .lead-modal-scroll::-webkit-scrollbar-thumb {
+    background: #94a3b8;
+    border: 2px solid #f1f5f9;
+    border-radius: 999px;
+  }
+</style>
+
+<script>
+(function() {
+  /* ── Dropdown ─────────────────────────────────────────────────────────── */
+  function toggleLeadMenu(e) {
+    if (e) e.stopPropagation();
+    document.getElementById('lead-actions-dropdown').classList.toggle('hidden');
+  }
+  function closeLeadMenu() {
+    document.getElementById('lead-actions-dropdown').classList.add('hidden');
+  }
+  document.addEventListener('click', function(e) {
+    const wrap = document.getElementById('lead-menu-wrap');
+    if (wrap && !wrap.contains(e.target)) closeLeadMenu();
+  });
+
+  /* ── Email compose toggle ─────────────────────────────────────────────── */
+  function toggleEmailCompose() {
+    const panel = document.getElementById('email-compose-panel');
+    if (!panel) return;
+    const wasHidden = panel.classList.contains('hidden');
+    panel.classList.toggle('hidden');
+    if (wasHidden) {
+      // reset form + chips + result on open
+      const form = document.getElementById('email-compose-form');
+      if (form) form.reset();
+      const chips = document.getElementById('attachment-chips');
+      if (chips) chips.innerHTML = '';
+      const result = document.getElementById('email-result');
+      if (result) result.innerHTML = '';
+      // focus subject
+      setTimeout(() => { const s = panel.querySelector('input[name="subject"]'); if (s) s.focus(); }, 50);
+    }
+  }
+
+  /* ── Attachment chips ─────────────────────────────────────────────────── */
+  function handleAttachmentChange(input) {
+    const container = document.getElementById('attachment-chips');
+    if (!container) return;
+    container.innerHTML = '';
+    if (!input.files || !input.files.length) return;
+    Array.from(input.files).forEach(function(f) {
+      const size = f.size < 1024 * 1024
+        ? (f.size / 1024).toFixed(0) + ' KB'
+        : (f.size / 1024 / 1024).toFixed(1) + ' MB';
+      const chip = document.createElement('span');
+      chip.className = 'inline-flex items-center gap-1 text-[10px] font-medium '
+        + 'bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full';
+      chip.innerHTML = '<svg class="w-2.5 h-2.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">'
+        + '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" '
+        + 'd="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>'
+        + '</svg>'
+        + '<span class="truncate max-w-[120px]">' + f.name + '</span>'
+        + '<span class="text-blue-400">(' + size + ')</span>';
+      container.appendChild(chip);
+    });
+  }
+
+  /* ── Email body expand/collapse ──────────────────────────────────────────── */
+  function toggleEmailBody(id) {
+    const body   = document.getElementById('email-body-' + id);
+    const toggle = document.getElementById('email-body-toggle-' + id);
+    if (!body || !toggle) return;
+    const expanded = body.style.maxHeight === 'none';
+    body.style.maxHeight   = expanded ? '' : 'none';
+    body.classList.toggle('max-h-24', expanded);
+    toggle.textContent = expanded ? 'Show more ▾' : 'Show less ▴';
+  }
+
+  /* ── Email template auto-fill ────────────────────────────────────────────── */
+  function applyLeadTemplate(subject, body) {
+    var s = document.getElementById('lead-email-subject');
+    var b = document.getElementById('lead-email-body');
+    if (s) s.value = subject;
+    if (b) b.value = body;
+  }
+
+  /* Expose to inline handlers */
+  window.toggleLeadMenu         = toggleLeadMenu;
+  window.closeLeadMenu          = closeLeadMenu;
+  window.toggleEmailCompose     = toggleEmailCompose;
+  window.handleAttachmentChange = handleAttachmentChange;
+  window.toggleEmailBody        = toggleEmailBody;
+  window.applyLeadTemplate      = applyLeadTemplate;
+})();
+</script>

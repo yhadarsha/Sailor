@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+
+{% block title %}Call Setup | Sailor{% endblock %}
+{% block page_title %}Call Setup{% endblock %}
+
+{% block content %}
+<div style="max-width:760px;margin:32px auto;padding:0 20px;">
+  <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:24px;box-shadow:0 1px 3px rgba(15,23,42,.08);">
+    <h1 style="font-size:22px;font-weight:700;color:#0f172a;margin:0 0 6px;">Phone Call Handoff</h1>
+    <p style="font-size:14px;color:#64748b;margin:0 0 20px;">
+      Register this phone so Sailor can send call notifications from your laptop to your mobile. Your Azure phone number is optional for this.
+    </p>
+
+    <div style="display:grid;gap:12px;margin-bottom:20px;">
+      <div style="border:1px solid #e2e8f0;border-radius:10px;padding:14px;">
+        <div style="font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;">Azure phone</div>
+        <div style="font-size:15px;color:#0f172a;margin-top:4px;">
+          {% if current_user.call_handoff_phone %}
+            {{ current_user.call_handoff_phone }}
+          {% else %}
+            Not synced yet. Call handoff will still work after this phone is registered.
+          {% endif %}
+        </div>
+      </div>
+
+      <div style="border:1px solid #e2e8f0;border-radius:10px;padding:14px;">
+        <div style="font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;">Registered devices</div>
+        <div style="font-size:15px;color:#0f172a;margin-top:4px;">
+          {% if devices %}
+            {% for device in devices %}
+              <div>{{ device.name|default:"Phone" }}{% if device.last_seen_at %} · {{ device.last_seen_at|date:"d M, H:i" }}{% endif %}</div>
+            {% endfor %}
+          {% else %}
+            No phone registered yet.
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    {% if not vapid_public_key %}
+      <div style="font-size:13px;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px;">
+        Web Push keys are not configured. Add VAPID keys to the server environment first.
+      </div>
+    {% else %}
+      <button id="register-phone-btn"
+              style="background:#30B9EF;color:white;border:0;border-radius:9px;padding:10px 16px;font-weight:700;cursor:pointer;">
+        Register This Phone
+      </button>
+      <div id="setup-result" style="font-size:13px;color:#64748b;margin-top:12px;"></div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const VAPID_PUBLIC_KEY = "{{ vapid_public_key|escapejs }}";
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
+}
+
+function csrfToken() {
+  const match = document.cookie.match(/(?:^|; )csrftoken=([^;]+)/);
+  return match ? decodeURIComponent(match[1]) : '';
+}
+
+const button = document.getElementById('register-phone-btn');
+if (button) {
+  button.addEventListener('click', async () => {
+    const result = document.getElementById('setup-result');
+    result.textContent = 'Preparing this phone...';
+
+    try {
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        throw new Error('This browser does not support PWA push notifications.');
+      }
+
+      const registration = await navigator.serviceWorker.register('/service-worker.js');
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        throw new Error('Notification permission was not granted.');
+      }
+
+      let subscription = await registration.pushManager.getSubscription();
+      if (!subscription) {
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+        });
+      }
+
+      const response = await fetch('/call/register-device/', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': csrfToken(),
+        },
+        body: JSON.stringify({
+          name: navigator.userAgent.includes('iPhone') ? 'iPhone' : 'Mobile phone',
+          subscription,
+        }),
+      });
+
+      const data = await response.json();
+      if (!data.ok) throw new Error(data.message || 'Unable to register phone.');
+      result.textContent = data.message;
+    } catch (error) {
+      result.textContent = error.message;
+    }
+  });
+}
+</script>
+{% endblock %}

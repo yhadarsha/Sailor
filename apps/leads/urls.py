@@ -1,0 +1,9 @@
+"""
+leads URLs — add API routes here as views are built.
+"""
+
+from django.urls import path
+
+app_name = "leads"
+
+urlpatterns = []

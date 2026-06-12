@@ -1,0 +1,148 @@
+{% comment %}Lead list view — table with checkboxes, stage filter tabs{% endcomment %}
+
+<!-- Stage filter tabs -->
+<div class="flex items-center gap-1.5 mb-3 flex-wrap">
+  <button onclick="filterByStage('all')"
+          class="stage-tab stage-tab-all text-xs font-semibold px-3 py-1.5 rounded-lg
+                 bg-slate-900 text-white transition-colors">
+    All <span class="ml-1 opacity-60">{{ total_leads }}</span>
+  </button>
+  {% for stage, leads in stages_with_leads %}
+  {% if leads %}
+  <button onclick="filterByStage('{{ stage.id }}')"
+          class="stage-tab text-xs font-semibold px-3 py-1.5 rounded-lg
+                 bg-white border border-slate-200 text-slate-600
+                 hover:border-blue-300 hover:text-blue-600 transition-colors"
+          data-stage-id="{{ stage.id }}">
+    {{ stage.name }} <span class="ml-1 opacity-60">{{ leads|length }}</span>
+  </button>
+  {% endif %}
+  {% endfor %}
+</div>
+
+<!-- Table -->
+<div class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+  <table class="w-full text-xs" id="leads-table">
+    <thead>
+      <tr class="border-b border-slate-100 bg-slate-50/60 text-slate-400 text-left">
+        <th class="px-4 py-3 w-8">
+          <input type="checkbox" id="select-all"
+                 onchange="toggleAllLeads(this.checked)"
+                 class="rounded border-slate-300 text-blue-500 focus:ring-blue-400 w-3.5 h-3.5">
+        </th>
+        <th class="px-3 py-3 font-semibold">Lead</th>
+        <th class="px-3 py-3 font-semibold hidden sm:table-cell">Company</th>
+        <th class="px-3 py-3 font-semibold hidden md:table-cell">Stage</th>
+        {% if is_admin %}<th class="px-3 py-3 font-semibold hidden lg:table-cell">Owner</th>{% endif %}
+        <th class="px-3 py-3 font-semibold hidden lg:table-cell">Source</th>
+        <th class="px-3 py-3 font-semibold hidden xl:table-cell">Email</th>
+        <th class="px-3 py-3 font-semibold hidden xl:table-cell">Campaigns</th>
+        <th class="px-3 py-3 font-semibold hidden xl:table-cell">Added</th>
+        <th class="px-3 py-3 w-10"></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for stage, leads in stages_with_leads %}
+      {% for lead in leads %}
+      <tr class="lead-row border-b border-slate-50 hover:bg-slate-50/60 transition-colors group"
+          data-lead-id="{{ lead.id }}"
+          data-stage-id="{{ stage.id }}">
+
+        <td class="px-4 py-3">
+          <input type="checkbox"
+                 class="lead-checkbox rounded border-slate-300 text-blue-500
+                        focus:ring-blue-400 w-3.5 h-3.5"
+                 data-lead-id="{{ lead.id }}"
+                 onchange="toggleLead('{{ lead.id }}', this.checked)">
+        </td>
+
+        <td class="px-3 py-3">
+          <button hx-get="/leads/{{ lead.id }}/"
+                  hx-target="#modal-content"
+                  hx-swap="innerHTML"
+                  onclick="openModal()"
+                  class="text-left">
+            <p class="font-semibold text-slate-700 group-hover:text-blue-600 transition-colors">
+              {{ lead.first_name }} {{ lead.last_name }}
+            </p>
+            {% if lead.title %}
+            <p class="text-slate-400 truncate max-w-40">{{ lead.title }}</p>
+            {% endif %}
+          </button>
+        </td>
+
+        <td class="px-3 py-3 hidden sm:table-cell text-slate-600">
+          {{ lead.company.name|default:"—" }}
+        </td>
+
+        <td class="px-3 py-3 hidden md:table-cell">
+          {% if lead.current_stage %}
+          <span class="px-2 py-0.5 rounded-full font-semibold text-[10px]"
+                style="background:#e0f5fc;color:#29307C">
+            {{ lead.current_stage.name }}
+          </span>
+          {% else %}—{% endif %}
+        </td>
+
+        {% if is_admin %}
+        <td class="px-3 py-3 hidden lg:table-cell text-slate-500">
+          {{ lead.assigned_to.display_name|default:"—" }}
+        </td>
+        {% endif %}
+
+        <td class="px-3 py-3 hidden lg:table-cell text-slate-500">
+          {{ lead.source.name|default:"—" }}
+        </td>
+
+        <td class="px-3 py-3 hidden xl:table-cell text-slate-500 truncate max-w-40">
+          {% if lead.email %}
+          <a href="mailto:{{ lead.email }}" class="hover:text-blue-600 transition-colors">
+            {{ lead.email }}
+          </a>
+          {% else %}—{% endif %}
+        </td>
+
+        <!-- Campaign badge -->
+        <td class="px-3 py-3 hidden xl:table-cell">
+          {% if lead.id|stringformat:"s" in campaign_counts %}
+          <span class="inline-flex items-center gap-1 text-[10px] font-semibold
+                       px-2 py-0.5 rounded-full bg-violet-100 text-violet-700">
+            <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+            </svg>
+            In campaign
+          </span>
+          {% else %}
+          <span class="text-[10px] text-slate-300">—</span>
+          {% endif %}
+        </td>
+
+        <td class="px-3 py-3 hidden xl:table-cell text-slate-400 whitespace-nowrap">
+          {{ lead.created_at|date:"d M Y" }}
+        </td>
+
+        <td class="px-3 py-3 text-right">
+          <button hx-get="/leads/{{ lead.id }}/"
+                  hx-target="#modal-content"
+                  hx-swap="innerHTML"
+                  onclick="openModal()"
+                  class="text-slate-300 hover:text-blue-500 transition-colors opacity-0
+                         group-hover:opacity-100 p-1 rounded">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+            </svg>
+          </button>
+        </td>
+
+      </tr>
+      {% empty %}{% endfor %}
+      {% empty %}
+      <tr>
+        <td colspan="9" class="px-4 py-12 text-center text-slate-400">No leads found.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

@@ -1,0 +1,229 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sailor | One Who Sell's</title>
+  <link rel="icon" type="image/png" href="{% static 'images/favicon.png' %}">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* ── Brand tokens ────────────────────────────────── */
+    :root {
+      --primary:   #30B9EF;
+      --secondary: #29307C;
+    }
+
+    html, body {
+      height: 100%;
+      margin: 0;
+      font-family: 'Roboto', 'Segoe UI', sans-serif;
+    }
+
+    /* ── Full-viewport dark cover ────────────────────── */
+    .login-bg {
+      min-height: 100vh;
+      width: 100%;
+      background: var(--secondary);
+      /* Layered gradient overlay gives depth even without the image */
+      background: linear-gradient(135deg, #404cb4 0%, #29307C 45%, #1D2E79 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Subtle grid pattern overlay (org style) */
+    .login-bg::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(48,185,239,0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(48,185,239,0.05) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+    }
+/* ── Login card ──────────────────────────────────── */
+    .data-input {
+      background-color: #e3e7f2;
+      border-radius: 15px;
+      box-shadow:
+        0 -2px 11px 0 rgba(0,0,0,0.15),
+        0  3px  5px 0 rgba(0,0,0,0.15);
+      width: 360px;
+      min-width: 360px;
+      position: relative;
+      z-index: 1;
+      
+      /* --- HEIGHT ADJUSTMENTS START HERE --- */
+      min-height: 400px;      /* Increased height (Adjust this value as needed) */
+      display: flex;          /* Enables flexible vertical layout */
+      flex-direction: column; /* Stacks items vertically */
+    }
+
+    /* ── Logo area ───────────────────────────────────── */
+    .dl-qualis-logo {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 77px 0 8px;
+    }
+
+    .dl-qualis-logo img {
+      width: 200px;
+      height: auto;
+      object-fit: contain;
+    }
+
+    /* ── Card body ───────────────────────────────────── */
+    .card-content {
+      padding: 137px 25px;
+      flex-grow: 1;           /* Forces content area to fill up remaining height */
+      display: flex;
+      flex-direction: column;
+      justify-content: center; /* Centers the login text and button perfectly */
+      padding-bottom: 40px;   /* Extra spacing at the bottom for visual balance */
+    }
+
+    /* ── Divider ─────────────────────────────────────── */
+    .divider {
+      height: 1px;
+      background: rgba(41,48,124,0.12);
+      margin: 0 25px 22px;
+    }
+
+    /* ── SSO button ──────────────────────────────────── */
+    .btn-sso {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+      height: 40px;
+      background-color: #27aee3;
+      color: #ffffff;
+      border: none;
+      border-radius: 5px;
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background 0.18s;
+    }
+    .btn-sso:hover { background-color: #0796ce; }
+    .btn-sso:active { background-color: #0678a8; }
+
+    /* ── Error banner ────────────────────────────────── */
+    .error-banner {
+      background: #fee2e2;
+      border: 1px solid #fca5a5;
+      border-radius: 6px;
+      color: #dc2626;
+      font-size: 12px;
+      padding: 8px 12px;
+      margin-bottom: 14px;
+      text-align: center;
+    }
+
+    /* ── Powered-by footer ───────────────────────────── */
+    .powered-by {
+      position: fixed;
+      bottom: 14px;
+      right: 18px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: rgba(255,255,255,0.35);
+      font-size: 11px;
+      font-family: 'Segoe UI', sans-serif;
+      letter-spacing: 0.5px;
+    }
+
+    .powered-by img {
+      height: 18px;
+      opacity: 0.4;
+    }
+
+    /* ── Subtle wave decoration ──────────────────────── */
+    .wave-bottom {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      pointer-events: none;
+      opacity: 0.07;
+    }
+
+    /* ── Sign-in label ───────────────────────────────── */
+    .signin-label {
+      color: rgba(0,0,0,0.55);
+      font-size: 13px;
+      font-weight: 500;
+      text-align: center;
+      margin-bottom: 14px;
+      display: block;
+    }
+
+    /* Microsoft logo inside button */
+    .ms-logo {
+      width: 18px;
+      height: 18px;
+      flex-shrink: 0;
+    }
+  </style>
+</head>
+<body>
+
+<div class="login-bg">
+
+  <!-- ── Login card ───────────────────────────────────────────────────── -->
+  <div class="data-input">
+
+    <!-- Logo -->
+    <div class="dl-qualis-logo">
+      <img src="{% static 'images/lmsicon.png' %}" alt="Sailor" />
+    </div>
+      <span style="margin-left: 60%; color: #dc2626;">0.0.0.17</span>
+
+
+    <div class="card-content">
+
+      {% if error %}
+      <div class="error-banner">{{ error }}</div>
+      {% endif %}
+
+      <span class="signin-label">Sign in to your account</span>
+
+      <!-- Single SSO button — no username/password -->
+      <a href="/auth/redirect/" class="btn-sso">
+        <!-- Microsoft "M" logo (inline SVG, no external dependency) -->
+        <svg class="ms-logo" viewBox="0 0 21 21" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="1"  y="1"  width="9" height="9" fill="#F25022"/>
+          <rect x="11" y="1"  width="9" height="9" fill="#7FBA00"/>
+          <rect x="1"  y="11" width="9" height="9" fill="#00A4EF"/>
+          <rect x="11" y="11" width="9" height="9" fill="#FFB900"/>
+        </svg>
+        Sign in with Microsoft
+      </a>
+
+    </div>
+  </div>
+
+  <!-- ── Powered-by footer ────────────────────────────────────────────── -->
+  <div class="powered-by">
+    <img src="{% static 'images/datalyzer-icon.svg' %}" alt="Datalyzer" />
+    Powered by Datalyzer
+  </div>
+
+  <!-- ── Decorative wave ──────────────────────────────────────────────── -->
+  <svg class="wave-bottom" viewBox="0 0 1440 160" xmlns="http://www.w3.org/2000/svg">
+    <path d="M0,96 C360,160 1080,32 1440,96 L1440,160 L0,160 Z" fill="#30B9EF"/>
+  </svg>
+
+</div>
+
+</body>
+</html>

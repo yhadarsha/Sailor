@@ -1,0 +1,91 @@
+{% comment %}Dead/inactive board columns — one column per terminal stage.{% endcomment %}
+
+{% if stages_with_leads %}
+<div class="flex gap-4 overflow-x-auto pb-4 kanban-scroll">
+  {% for stage, leads in stages_with_leads %}
+  <div class="flex-shrink-0 w-72">
+
+    <!-- Column header -->
+    <div class="flex items-center justify-between mb-3 px-1">
+      <div class="flex items-center gap-2">
+        <div class="w-2.5 h-2.5 rounded-full bg-slate-400"></div>
+        <span class="text-xs font-bold text-slate-600 uppercase tracking-wide">{{ stage.name }}</span>
+        <span class="text-xs text-slate-400 font-medium">({{ leads|length }})</span>
+      </div>
+    </div>
+
+    <!-- Cards -->
+    <div class="space-y-2 kanban-column">
+      {% for lead in leads %}
+      <div class="bg-white rounded-lg border border-slate-200 p-3 shadow-sm
+                  hover:shadow-md hover:border-slate-300 transition-all duration-150 group"
+           data-lead-id="{{ lead.id }}">
+
+        <p class="text-sm font-semibold text-slate-700 truncate">{{ lead.full_name }}</p>
+
+        {% if lead.company %}
+        <p class="text-xs text-slate-400 truncate mt-0.5">{{ lead.company.name }}</p>
+        {% endif %}
+
+        <div class="flex flex-wrap gap-1.5 mt-2">
+          {% if lead.city %}
+          <span class="text-xs bg-slate-50 border border-slate-200 text-slate-400 rounded-md px-1.5 py-0.5">
+            {{ lead.city }}
+          </span>
+          {% endif %}
+          {% if lead.source %}
+          <span class="text-xs bg-slate-50 border border-slate-200 text-slate-400 rounded-md px-1.5 py-0.5">
+            {{ lead.source.name }}
+          </span>
+          {% endif %}
+        </div>
+
+        <div class="flex items-center justify-between mt-2.5 pt-2 border-t border-slate-100">
+          {% if lead.assigned_to %}
+          <span class="text-xs text-slate-400 truncate">{{ lead.assigned_to.display_name }}</span>
+          {% else %}
+          <span class="text-xs text-slate-300 italic">Unassigned</span>
+          {% endif %}
+
+          <!-- View detail modal -->
+          <button hx-get="/leads/{{ lead.id }}/"
+                  hx-target="#modal-content"
+                  hx-swap="innerHTML"
+                  title="View lead"
+                  class="text-xs text-slate-300 group-hover:text-blue-500
+                         transition-colors flex-shrink-0 ml-2 bg-transparent border-0 p-0 cursor-pointer">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7
+                       -1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+            </svg>
+          </button>
+        </div>
+
+      </div>
+      {% empty %}
+      <div class="flex flex-col items-center justify-center py-10 text-center
+                  border-2 border-dashed border-slate-200 rounded-xl">
+        <p class="text-xs text-slate-300 font-medium">No leads here</p>
+      </div>
+      {% endfor %}
+    </div>
+
+  </div>
+  {% endfor %}
+</div>
+
+{% else %}
+<div class="flex flex-col items-center justify-center py-20 text-center">
+  <div class="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center mb-4">
+    <svg class="w-6 h-6 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+    </svg>
+  </div>
+  <p class="text-sm font-medium text-slate-400">No dead or inactive leads</p>
+  <p class="text-xs text-slate-300 mt-1">Leads marked as dead will appear here</p>
+</div>
+{% endif %}

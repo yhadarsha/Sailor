@@ -1,0 +1,38 @@
+{% comment %}
+Partial: rendered on first load AND on every filter change via HTMX.
+Receives context: stages_with_leads, (no need for custom template tags).
+{% endcomment %}
+
+{% for stage, leads in stages_with_leads %}
+<div class="kanban-col-wrapper flex-shrink-0 w-68" style="width:272px">
+
+  <!-- Column header -->
+  <div class="flex items-center justify-between mb-2.5 px-0.5">
+    <div class="flex items-center gap-2">
+      <span class="w-2 h-2 rounded-full flex-shrink-0"
+            style="background-color: {{ stage.color|default:'#94a3b8' }}"></span>
+      <span class="text-xs font-semibold text-slate-700 tracking-wide uppercase">
+        {{ stage.name }}
+      </span>
+    </div>
+    <span class="stage-count text-xs bg-slate-100 text-slate-500 font-medium
+                 px-2 py-0.5 rounded-full tabular-nums">
+      {{ leads|length }}
+    </span>
+  </div>
+
+  <!-- Drop zone -->
+  <div class="kanban-column flex flex-col gap-2 bg-slate-100 rounded-xl p-2"
+       data-stage-id="{{ stage.id }}">
+
+    {% for lead in leads %}
+      {% include "pipeline/partials/card.html" with lead=lead %}
+    {% empty %}
+      <div class="empty-placeholder text-center text-slate-300 text-xs py-8 select-none pointer-events-none">
+        Drop here
+      </div>
+    {% endfor %}
+
+  </div>
+</div>
+{% endfor %}

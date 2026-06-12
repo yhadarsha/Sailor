@@ -1,0 +1,808 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}SailBoard | Sailor{% endblock %}
+{% block page_title %}SailBoard{% endblock %}
+
+{% block content %}
+<div class="dashboard-wrap">
+
+  <!-- ── Page header ────────────────────────────────────────────────────── -->
+  <div class="dash-header">
+    <div>
+      <h1 class="dash-title">SailBoard</h1>
+      <p class="dash-sub">
+        {% if view_mode == "my" %}Your personal pipeline at a glance{% else %}Team pipeline &amp; performance at a glance{% endif %}
+      </p>
+    </div>
+
+
+    <div class="dash-header-right">
+      <!-- My / Team toggle -->
+      <div class="view-toggle" role="group" aria-label="Dashboard view">
+        <a href="?view=my"
+           class="vt-btn{% if view_mode == 'my' %} vt-active{% endif %}"
+           title="Your assigned leads only">
+          <svg class="vt-icon" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M10 10a4 4 0 100-8 4 4 0 000 8zm-7 8a7 7 0 1114 0H3z"/>
+          </svg>
+          My View
+        </a>
+        <a href="?view=team"
+           class="vt-btn{% if view_mode == 'team' %} vt-active{% endif %}"
+           title="All users&#39; data">
+          <svg class="vt-icon" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM6 8a2 2 0 11-4 0 2 2 0 014 0zM15.22 14.79A5.002 5.002 0 0010 11a5 5 0 00-5.22 3.79A7.956 7.956 0 0010 17c1.933 0 3.708-.69 5.22-1.21zM17 16a6.97 6.97 0 00-1.5-4.33A3.978 3.978 0 0118 15v1h-1zm-13 0H3v-1a3.978 3.978 0 012.5-3.33A6.97 6.97 0 003 16z"/>
+          </svg>
+          Team View
+        </a>
+      </div>
+      {% if sailor_user %}
+      <div class="dash-user-badge">
+        <span class="dub-dot"></span>
+        {{ sailor_user.display_name }}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- ── Stat cards row ─────────────────────────────────────────────────── -->
+  <div class="stat-grid">
+
+    <div class="stat-card">
+      <div class="stat-icon si-blue"><i class="dl-user_management"></i></div>
+      <div class="stat-body">
+        <div class="stat-value">{{ total_active }}</div>
+        <div class="stat-label">
+          {% if view_mode == "my" %}My Active Leads{% else %}Active Leads{% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-icon si-green"><i class="dl-bar-chart"></i></div>
+      <div class="stat-body">
+        <div class="stat-value">{{ leads_this_week }}</div>
+        <div class="stat-label">
+          {% if view_mode == "my" %}My Leads This Week{% else %}Added This Week{% endif %}
+          {% if week_delta > 0 %}
+            <span class="delta up">▲ {{ week_delta }}</span>
+          {% elif week_delta < 0 %}
+            <span class="delta down">▼ {{ week_delta|cut:"-" }}</span>
+          {% else %}
+            <span class="delta neutral">— same</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-icon si-teal"><i class="dl-stat"></i></div>
+      <div class="stat-body">
+        <div class="stat-value">{{ conversion_rate }}%</div>
+        <div class="stat-label">
+          {% if view_mode == "my" %}My Conversion Rate{% else %}Conversion Rate{% endif %}
+          <span class="delta neutral">{{ total_converted }} won</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-icon si-purple"><i class="dl-user_login"></i></div>
+      <div class="stat-body">
+        <div class="stat-value">{{ total_converted }}</div>
+        <div class="stat-label">
+          {% if view_mode == "my" %}My Won Leads{% else %}Total Won{% endif %}
+          <span class="delta neutral">{{ dead }} dead</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── Charts row ─────────────────────────────────────────────────────── -->
+  <div class="chart-grid">
+
+    <!-- Funnel bar chart -->
+    <div class="chart-card chart-card-wide">
+      <div class="chart-card-header">
+        <span class="chart-card-title">Pipeline Funnel</span>
+        <span class="chart-card-sub">Leads per stage right now</span>
+      </div>
+      <div class="chart-body">
+        <canvas id="funnelChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Source doughnut -->
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <span class="chart-card-title">Leads by Source</span>
+        <span class="chart-card-sub">Top channels</span>
+      </div>
+      <div class="chart-body chart-body-sm">
+        <canvas id="sourceChart"></canvas>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── Trend line ─────────────────────────────────────────────────────── -->
+  <div class="chart-card chart-card-full">
+    <div class="chart-card-header">
+      <span class="chart-card-title">Lead Volume — Last 30 Days</span>
+      <span class="chart-card-sub">New leads created per day</span>
+    </div>
+    <div class="chart-body chart-body-trend">
+      <canvas id="trendChart"></canvas>
+    </div>
+  </div>
+
+  <!-- ── Bottom row: team table + activity feed ─────────────────────────── -->
+  <div class="bottom-grid">
+
+    <!-- Team leaderboard -->
+    <div class="dash-table-card">
+      <div class="chart-card-header">
+        <span class="chart-card-title">Team Pipeline</span>
+        <span class="chart-card-sub">Active leads per owner</span>
+      </div>
+      <table class="dash-table">
+        <thead>
+          <tr>
+            <th>Owner</th>
+            <th class="text-right">Active</th>
+            <th class="text-right">Converted</th>
+            <th class="text-right">Rate</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for u in user_stats %}
+          <tr>
+            <td>
+              <div class="owner-cell">
+                <div class="owner-avatar">{{ u.display_name|slice:":1"|upper }}</div>
+                {{ u.display_name }}
+              </div>
+            </td>
+            <td class="text-right fw-600">{{ u.total }}</td>
+            <td class="text-right text-green">{{ u.converted }}</td>
+            <td class="text-right text-muted">
+              {% if u.total %}
+                {% widthratio u.converted u.total 100 %}%
+              {% else %}—{% endif %}
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="4" class="text-muted text-center py-4">No data yet</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Recent activity feed -->
+    <div class="dash-table-card">
+      <div class="chart-card-header">
+        <span class="chart-card-title">Recent Activity</span>
+        <span class="chart-card-sub">Stage moves — last 7 days</span>
+      </div>
+      <div class="activity-feed">
+        {% for evt in recent_activity %}
+        <div class="af-row">
+          <div class="af-dot"></div>
+          <div class="af-body">
+            <div class="af-lead">{{ evt.lead.full_name }}</div>
+            <div class="af-meta">
+              {% if evt.from_stage %}
+                <span class="af-stage from">{{ evt.from_stage.name }}</span>
+                <span class="af-arrow">→</span>
+              {% endif %}
+              <span class="af-stage to">{{ evt.to_stage.name }}</span>
+              {% if evt.changed_by %}
+              <span class="af-by">by {{ evt.changed_by.display_name }}</span>
+              {% endif %}
+            </div>
+            <div class="af-time">{{ evt.changed_at|timesince }} ago</div>
+          </div>
+        </div>
+        {% empty %}
+        <div class="text-muted text-center py-4" style="font-size:13px">No activity in the last 7 days</div>
+        {% endfor %}
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── My Pipeline (personal funnel) — shown in My View ─────────────── -->
+  {% if view_mode == "my" and my_funnel %}
+  <div class="chart-card chart-card-full my-pipeline-card">
+    <div class="chart-card-header">
+      <span class="chart-card-title">My Pipeline</span>
+      <span class="chart-card-sub">{{ sailor_user.display_name }} — leads by stage</span>
+    </div>
+    <div class="my-funnel-row">
+      {% for item in my_funnel %}
+      {% if item.count > 0 %}
+      <div class="my-funnel-stage">
+        <div class="my-funnel-count">{{ item.count }}</div>
+        <div class="my-funnel-bar-wrap">
+          <div class="my-funnel-bar" style="height: calc({{ item.count }} * 8px); max-height: 80px;"></div>
+        </div>
+        <div class="my-funnel-label">{{ item.stage }}</div>
+      </div>
+      {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+</div><!-- /.dashboard-wrap -->
+
+<!-- ── Chart.js + datalabels plugin ───────────────────────────────────────── -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+<script>
+// Register datalabels only for bar charts — don't auto-apply to all charts
+const funnelDatalabels = {
+  id: 'funnelDatalabels',
+  afterDatasetsDraw(chart) {
+    const { ctx, data, scales: { x, y } } = chart;
+    ctx.save();
+    chart.data.datasets.forEach((dataset, i) => {
+      chart.getDatasetMeta(i).data.forEach((bar, j) => {
+        const val = dataset.data[j];
+        if (val === 0) return;
+        ctx.fillStyle = '#334155';
+        ctx.font = 'bold 12px "Segoe UI", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        // always render label at least 20px above the x-axis so tiny bars stay readable
+        const labelY = Math.min(bar.y - 4, y.getPixelForValue(0) - 20);
+        ctx.fillText(val, bar.x, labelY);
+      });
+    });
+    ctx.restore();
+  }
+};
+
+const PRIMARY  = '#30B9EF';
+const SECONDARY = '#29307C';
+const PALETTE = [
+  '#30B9EF','#29307C','#4ade80','#f59e0b','#f87171',
+  '#a78bfa','#34d399','#fb923c','#60a5fa','#e879f9'
+];
+
+// ── Funnel ────────────────────────────────────────────────────────────────
+new Chart(document.getElementById('funnelChart'), {
+  type: 'bar',
+  plugins: [funnelDatalabels],
+  data: {
+    labels: {{ funnel_labels|safe }},
+    datasets: [{
+      label: 'Leads',
+      data: {{ funnel_counts|safe }},
+      backgroundColor: PALETTE,
+      borderRadius: 6,
+      borderSkipped: false,
+      // Enforce a minimum visible bar height of 6px for non-zero values
+      minBarLength: 6,
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: ctx => ` ${ctx.parsed.y} leads`
+        }
+      }
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        grid: { color: 'rgba(0,0,0,0.05)' },
+        ticks: { precision: 0 }
+      },
+      x: { grid: { display: false } }
+    }
+  }
+});
+
+// ── Source doughnut ───────────────────────────────────────────────────────
+new Chart(document.getElementById('sourceChart'), {
+  type: 'doughnut',
+  data: {
+    labels: {{ source_labels|safe }},
+    datasets: [{
+      data: {{ source_counts|safe }},
+      backgroundColor: PALETTE,
+      borderWidth: 2,
+      borderColor: '#fff',
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 10 } }
+    },
+    cutout: '60%'
+  }
+});
+
+// ── Trend line ────────────────────────────────────────────────────────────
+new Chart(document.getElementById('trendChart'), {
+  type: 'line',
+  data: {
+    labels: {{ trend_labels|safe }},
+    datasets: [{
+      label: 'Leads added',
+      data: {{ trend_counts|safe }},
+      borderColor: PRIMARY,
+      backgroundColor: 'rgba(48,185,239,0.08)',
+      borderWidth: 2,
+      pointRadius: 2,
+      pointHoverRadius: 5,
+      fill: true,
+      tension: 0.35,
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { precision: 0 } },
+      x: { grid: { display: false }, ticks: { maxTicksLimit: 10 } }
+    }
+  }
+});
+</script>
+
+<style>
+/* ── Layout ─────────────────────────────────────────────────────────────── */
+.dashboard-wrap {
+  padding: 20px 24px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ── Header ─────────────────────────────────────────────────────────────── */
+.dash-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.dash-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0;
+}
+.dash-sub {
+  font-size: 13px;
+  color: #64748b;
+  margin: 3px 0 0;
+}
+.dash-user-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #64748b;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  padding: 5px 12px;
+}
+.dash-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.dub-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: #4ade80;
+  flex-shrink: 0;
+}
+
+/* ── My / Team view toggle ──────────────────────────────────────────────── */
+.view-toggle {
+  display: inline-flex;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  padding: 3px;
+  gap: 2px;
+}
+.vt-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748b;
+  padding: 5px 13px;
+  border-radius: 16px;
+  text-decoration: none;
+  transition: background .15s, color .15s, box-shadow .15s;
+  white-space: nowrap;
+}
+.vt-btn:hover {
+  background: #e2e8f0;
+  color: #334155;
+}
+.vt-btn.vt-active {
+  background: #fff;
+  color: #29307C;
+  font-weight: 600;
+  box-shadow: 0 1px 4px rgba(0,0,0,.10);
+}
+.vt-icon {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+}
+
+/* ── Stat cards ─────────────────────────────────────────────────────────── */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+}
+.stat-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  transition: box-shadow 0.15s;
+}
+.stat-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+.stat-card-mine { border-left: 3px solid #a78bfa; }
+.stat-icon {
+  width: 44px; height: 44px;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+.si-blue   { background: #eff8ff; color: #30B9EF; }
+.si-green  { background: #f0fdf4; color: #22c55e; }
+.si-teal   { background: #f0fdfa; color: #14b8a6; }
+.si-purple { background: #faf5ff; color: #a855f7; }
+.stat-value {
+  font-size: 26px;
+  font-weight: 700;
+  color: #1e293b;
+  line-height: 1;
+}
+.stat-label {
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.delta { font-size: 11px; font-weight: 600; border-radius: 4px; padding: 1px 5px; }
+.delta.up      { background: #dcfce7; color: #16a34a; }
+.delta.down    { background: #fee2e2; color: #dc2626; }
+.delta.neutral { background: #f1f5f9; color: #64748b; }
+
+/* ── Chart cards ────────────────────────────────────────────────────────── */
+.chart-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 16px;
+}
+.chart-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  min-width: 0;
+}
+.chart-card-full  { width: 100%; }
+.chart-card-wide  {}
+.chart-card-header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.chart-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+}
+.chart-card-sub {
+  font-size: 12px;
+  color: #94a3b8;
+}
+.chart-body          { height: 220px; position: relative; }
+.chart-body-sm       { height: 200px; }
+.chart-body-trend    { height: 160px; }
+
+/* ── Bottom grid ────────────────────────────────────────────────────────── */
+.bottom-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+}
+.dash-table-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  overflow: hidden;
+  min-width: 0;
+}
+.dash-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.dash-table th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #94a3b8;
+  padding: 0 8px 10px;
+  border-bottom: 1px solid #f1f5f9;
+}
+.dash-table td {
+  padding: 9px 8px;
+  color: #334155;
+  border-bottom: 1px solid #f8fafc;
+  vertical-align: middle;
+}
+.dash-table tbody tr:last-child td { border-bottom: none; }
+.dash-table tbody tr:hover td { background: #f8fafc; }
+.text-right  { text-align: right !important; }
+.text-green  { color: #16a34a; }
+.text-muted  { color: #94a3b8; }
+.text-center { text-align: center; }
+.fw-600      { font-weight: 600; }
+.py-4        { padding: 16px 0; }
+.owner-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.owner-avatar {
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  background: #ede9fe;
+  color: #7c3aed;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+
+/* ── Activity feed ───────────────────────────────────────────────────────── */
+.activity-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.af-row {
+  display: flex;
+  gap: 10px;
+  padding: 9px 4px;
+  border-bottom: 1px solid #f8fafc;
+  align-items: flex-start;
+}
+.af-row:last-child { border-bottom: none; }
+.af-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: #30B9EF;
+  flex-shrink: 0;
+  margin-top: 5px;
+}
+.af-body { flex: 1; min-width: 0; }
+.af-lead {
+  font-size: 13px;
+  font-weight: 500;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.af-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+.af-stage {
+  font-size: 11px;
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-weight: 500;
+}
+.af-stage.from { background: #f1f5f9; color: #64748b; }
+.af-stage.to   { background: #eff8ff; color: #0284c7; }
+.af-arrow { font-size: 11px; color: #94a3b8; }
+.af-by    { font-size: 11px; color: #94a3b8; }
+.af-time  { font-size: 11px; color: #cbd5e1; margin-top: 2px; }
+
+/* ── My pipeline ────────────────────────────────────────────────────────── */
+.my-pipeline-card { margin-top: 0; }
+.my-funnel-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  padding: 20px 24px 16px;
+  overflow-x: auto;
+  min-height: 140px;
+}
+.my-funnel-stage  { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.my-funnel-count  { font-size: 20px; font-weight: 700; color: #1e293b; }
+.my-funnel-bar-wrap { display: flex; align-items: flex-end; height: 80px; }
+.my-funnel-bar    { width: 40px; background: linear-gradient(180deg, #30B9EF 0%, #29307C 100%);
+                    border-radius: 4px 4px 0 0; min-height: 8px; transition: height .3s; }
+.my-funnel-label  { font-size: 11px; color: #64748b; text-align: center; max-width: 60px;
+                    word-break: break-word; }
+
+/* ── View toggle ────────────────────────────────────────────────────────── */
+.dash-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.view-toggle {
+  display: inline-flex;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  padding: 3px;
+  gap: 2px;
+}
+.vt-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748b;
+  padding: 5px 13px;
+  border-radius: 16px;
+  text-decoration: none;
+  transition: background .15s, color .15s, box-shadow .15s;
+  white-space: nowrap;
+}
+.vt-btn:hover { background: #e2e8f0; color: #334155; }
+.vt-btn.vt-active {
+  background: #fff;
+  color: #29307C;
+  font-weight: 600;
+  box-shadow: 0 1px 4px rgba(0,0,0,.10);
+}
+.vt-icon { width: 13px; height: 13px; flex-shrink: 0; }
+
+</style>
+
+<!-- ── Chart.js ───────────────────────────────────────────────────────────── -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+const PRIMARY   = '#30B9EF';
+const SECONDARY = '#29307C';
+const PALETTE   = [
+  '#30B9EF','#29307C','#4ade80','#f59e0b','#f87171',
+  '#a78bfa','#34d399','#fb923c','#60a5fa','#e879f9'
+];
+
+const funnelDatalabels = {
+  id: 'funnelDatalabels',
+  afterDatasetsDraw(chart) {
+    const { ctx, scales: { y } } = chart;
+    ctx.save();
+    chart.data.datasets.forEach((dataset, i) => {
+      chart.getDatasetMeta(i).data.forEach((bar, j) => {
+        const val = dataset.data[j];
+        if (val === 0) return;
+        ctx.fillStyle = '#334155';
+        ctx.font = 'bold 12px "Segoe UI", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        const labelY = Math.min(bar.y - 4, y.getPixelForValue(0) - 20);
+        ctx.fillText(val, bar.x, labelY);
+      });
+    });
+    ctx.restore();
+  }
+};
+
+// Funnel
+new Chart(document.getElementById('funnelChart'), {
+  type: 'bar',
+  plugins: [funnelDatalabels],
+  data: {
+    labels: {{ funnel_labels|safe }},
+    datasets: [{
+      data: {{ funnel_counts|safe }},
+      backgroundColor: PRIMARY,
+      borderRadius: 6,
+      borderSkipped: false,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { display: false }, ticks: { font: { size: 12 } } },
+      y: { display: false, beginAtZero: true },
+    }
+  }
+});
+
+// Source doughnut
+new Chart(document.getElementById('sourceChart'), {
+  type: 'doughnut',
+  data: {
+    labels: {{ source_labels|safe }},
+    datasets: [{ data: {{ source_counts|safe }}, backgroundColor: PALETTE, borderWidth: 2 }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 10, boxWidth: 12 } }
+    },
+    cutout: '62%',
+  }
+});
+
+// Trend line
+new Chart(document.getElementById('trendChart'), {
+  type: 'line',
+  data: {
+    labels: {{ trend_labels|safe }},
+    datasets: [{
+      data: {{ trend_counts|safe }},
+      borderColor: PRIMARY,
+      backgroundColor: 'rgba(48,185,239,.10)',
+      fill: true,
+      tension: 0.4,
+      pointRadius: 3,
+      pointBackgroundColor: PRIMARY,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { display: false }, ticks: { font: { size: 11 }, maxTicksLimit: 10 } },
+      y: { beginAtZero: true, ticks: { font: { size: 11 }, precision: 0 },
+           grid: { color: '#f1f5f9' } },
+    }
+  }
+});
+</script>
+
+{% endblock %}

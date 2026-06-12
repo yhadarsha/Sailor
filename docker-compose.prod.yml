@@ -1,0 +1,144 @@
+version: "3.8"
+services:
+  sailor-db:
+    image: pgvector/pgvector:pg16
+    container_name: sailor_db
+    environment:
+      POSTGRES_DB: lms_db
+      POSTGRES_USER: lms_user
+      POSTGRES_PASSWORD: tiger
+    volumes:
+      - /srv/sailor/postgres:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - dlnetwork
+
+  sailor-redis:
+    image: redis:7-alpine
+    container_name: sailor_redis
+    volumes:
+      - /srv/sailor/redis:/data
+    restart: unless-stopped
+    networks:
+      - dlnetwork
+
+  sailor-web:
+    image: datalyzertechnologies/sailor-lms:0.0.0.8
+    container_name: sailor_web
+    ports:
+      - "50000:50000"
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.production
+      SECRET_KEY: 52b7b6d2-2234-49f8-8d65-a57004a008f8
+      ALLOWED_HOSTS: "sailor.datalyzerint.com"
+      DB_NAME: lms_db
+      DB_USER: lms_user
+      DB_PASSWORD: tigerer
+      DB_HOST: sailor-db
+      DB_PORT: 5432
+      REDIS_URL: redis://sailor-redis:6379/0
+      AZURE_AD_TENANT_ID: 52b7b6d2d65-a57004a008f8
+      AZURE_AD_CLIENT_ID: 7aaf5fa8-bb55-42c
+      AZURE_AD_CLIENT_SECRET: LxP8Q~DWWxLlFKVoPbJ_VC
+      AZURE_AD_REDIRECT_URI: https://sailor.datalyzerint.com/auth/callback/
+      AZURE_AD_SCOPES: User.Read,Mail.Send
+      WEBPUSH_VAPID_PUBLIC_KEY: BFc1cg2ezNgxFia51EQ1GGX4S1YpsDcowv50kK7m3s
+      WEBPUSH_VAPID_PRIVATE_KEY: /run/secrets/webpush_private_key.pem
+      WEBPUSH_VAPID_SUBJECT: mailto:adarsha.yh@datalyzerint.com
+      OPENAI_API_KEY: ""
+    volumes:
+      - /srv/sailor/media:/app/media
+      - /srv/sailor/staticfiles:/app/staticfiles
+      - /srv/sailor/private_key.pem:/run/secrets/webpush_private_key.pem:ro
+    depends_on:
+      - sailor-db
+      - sailor-redis
+    restart: unless-stopped
+    networks:
+      - dlnetwork
+
+  celery-worker:
+    image: datalyzertechnologies/sailor-lms:0.0.0.8
+    container_name: sailor_celery_worker
+    command: celery -A config worker -l info --concurrency 2
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.production
+      SECRET_KEY: 52b7b6d2-2234-49f8-8d65-a57004a008f8
+      ALLOWED_HOSTS: "sailor.datalyzerint.com"
+      DB_NAME: lms_db
+      DB_USER: lms_user
+      DB_PASSWORD: tigerer
+      DB_HOST: sailor-db
+      DB_PORT: 5432
+      REDIS_URL: redis://sailor-redis:6379/0
+      AZURE_AD_TENANT_ID: 52b7b6d2d65-a57004a008f8
+      AZURE_AD_CLIENT_ID: 7aaf5fa8-bb55-42c
+      AZURE_AD_CLIENT_SECRET: LxP8Q~DWWxLlFKVoPbJ_VC
+      AZURE_AD_REDIRECT_URI: https://sailor.datalyzerint.com/auth/callback/
+      AZURE_AD_SCOPES: User.Read,Mail.Send
+      WEBPUSH_VAPID_PUBLIC_KEY: BFc1cg2ezNgxFia51EQ1GGX4S1YpsDcowv50kK7m3s
+      WEBPUSH_VAPID_PRIVATE_KEY: /run/secrets/webpush_private_key.pem
+      WEBPUSH_VAPID_SUBJECT: mailto:adarsha.yh@datalyzerint.com
+      OPENAI_API_KEY: ""
+    volumes:
+      - /srv/sailor/media:/app/media
+      - /srv/sailor/private_key.pem:/run/secrets/webpush_private_key.pem:ro
+    depends_on:
+      - sailor-db
+      - sailor-redis
+    restart: unless-stopped
+    networks:
+      - dlnetwork
+
+  celery-beat:
+    image: datalyzertechnologies/sailor-lms:0.0.0.8
+    container_name: sailor_celery_beat
+    command: celery -A config beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.production
+      SECRET_KEY: 52b7b6d2-2234-49f8-8d65-a57004a008f8
+      ALLOWED_HOSTS: "sailor.datalyzerint.com"
+      DB_NAME: lms_db
+      DB_USER: lms_user
+      DB_PASSWORD: tigerer
+      DB_HOST: sailor-db
+      DB_PORT: 5432
+      REDIS_URL: redis://sailor-redis:6379/0
+      AZURE_AD_TENANT_ID: 52b7b6d2d65-a57004a008f8
+      AZURE_AD_CLIENT_ID: 7aaf5fa8-bb55-42c
+      AZURE_AD_CLIENT_SECRET: LxP8Q~DWWxLlFKVoPbJ_VC
+      AZURE_AD_REDIRECT_URI: https://sailor.datalyzerint.com/auth/callback/
+      AZURE_AD_SCOPES: User.Read,Mail.Send
+      WEBPUSH_VAPID_PUBLIC_KEY: BFc1cg2ezNgxFia51EQ1GGX4S1YpsDcowv50kK7m3s
+      WEBPUSH_VAPID_PRIVATE_KEY: /run/secrets/webpush_private_key.pem
+      WEBPUSH_VAPID_SUBJECT: mailto:adarsha.yh@datalyzerint.com
+      OPENAI_API_KEY: ""
+    volumes:
+      - /srv/sailor/media:/app/media
+      - /srv/sailor/private_key.pem:/run/secrets/webpush_private_key.pem:ro
+    depends_on:
+      - sailor-db
+      - sailor-redis
+    restart: unless-stopped
+    networks:
+      - dlnetwork
+
+  sailor-pgadmin:
+    image: dpage/pgadmin4:8
+    container_name: sailor_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: adarsha.yh@datalyzerint.com
+      PGADMIN_DEFAULT_PASSWORD: tiger
+    ports:
+      - "5050:80"
+    volumes:
+      - /srv/sailor/pgadmin:/var/lib/pgadmin
+    depends_on:
+      - sailor-db
+    restart: unless-stopped
+    networks:
+      - dlnetwork
+
+networks:
+  dlnetwork:
+    driver: bridge

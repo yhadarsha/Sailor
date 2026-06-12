@@ -1,0 +1,235 @@
+<form id="add-step-form"
+      method="POST"
+      action="/campaigns/{{ campaign.id }}/steps/add/"
+      enctype="multipart/form-data"
+      class="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+  {% csrf_token %}
+
+  <!-- Step type tabs -->
+  <div class="flex gap-2">
+    {% for val, label in step_type_choices %}
+    <label class="step-type-btn cursor-pointer">
+      <input type="radio" name="step_type" value="{{ val }}"
+             class="sr-only" {% if forloop.first %}checked{% endif %}
+             onchange="toggleStepType(this.value)">
+      <span class="inline-flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg
+                   border border-slate-200 bg-white text-slate-600
+                   hover:border-blue-300 hover:text-blue-600 transition-colors">
+        {% if val == 'email' %}
+        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+        </svg>
+        {% elif val == 'linkedin' %}
+        <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M16 8a6 6 0 016 6v7h-4v-7a2 2 0 00-2-2 2 2 0 00-2 2v7h-4v-7a6 6 0 016-6zM2 9h4v12H2z"/>
+          <circle cx="4" cy="4" r="2"/>
+        </svg>
+        {% else %}
+        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+        </svg>
+        {% endif %}
+        {{ label }}
+      </span>
+    </label>
+    {% endfor %}
+  </div>
+
+  <!-- Label row -->
+  <div>
+    <label class="block text-[11px] font-semibold text-slate-500 mb-1">Label <span class="font-normal text-slate-400">(optional)</span></label>
+    <input type="text" name="label" placeholder="e.g. Initial outreach"
+           class="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white
+                  focus:outline-none focus:ring-2 focus:ring-blue-400">
+  </div>
+
+  <!-- Schedule row -->
+  <div>
+    <label class="block text-[11px] font-semibold text-slate-500 mb-1">Schedule</label>
+    <div class="flex items-center gap-2">
+      <input type="datetime-local" name="scheduled_at" id="scheduled_at_input"
+             class="text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white
+                    focus:outline-none focus:ring-2 focus:ring-blue-400">
+      <button type="button"
+              onclick="document.getElementById('scheduled_at_input').value = ''; updateSaveStepState();"
+              class="text-[11px] text-slate-400 hover:text-red-400 transition-colors px-2 py-1.5
+                     border border-slate-200 rounded-lg bg-white">
+        Clear (manual)
+      </button>
+    </div>
+  </div>
+
+  <!-- Email fields -->
+  <div id="email-fields">
+
+    <!-- Template picker -->
+    {% if email_templates %}
+    <div class="mb-3">
+      <p class="text-[11px] font-semibold text-slate-500 mb-1.5">Use a template:</p>
+      <div class="flex flex-wrap gap-1.5">
+        {% for tmpl in email_templates %}
+        <button type="button"
+                onclick="applyStepTemplate('{{ tmpl.subject|escapejs }}', `{{ tmpl.body|escapejs }}`)"
+                class="text-[11px] font-medium px-2.5 py-1 rounded-full border border-blue-200
+                       bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors">
+          {{ tmpl.name }}
+        </button>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="mb-2">
+      <label class="block text-[11px] font-semibold text-slate-500 mb-1">Subject</label>
+      <input type="text" name="subject_template" id="step-subject"
+             placeholder="Hi {{first_name}}, quick question about {{company}}"
+             class="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white
+                    focus:outline-none focus:ring-2 focus:ring-blue-400">
+      {% if errors.subject_template %}<p class="text-red-500 text-[11px] mt-1">{{ errors.subject_template }}</p>{% endif %}
+    </div>
+    <div>
+      <label class="block text-[11px] font-semibold text-slate-500 mb-1">Body</label>
+      <textarea name="body_html_template" id="step-body" rows="5"
+                placeholder="Hi {{first_name}},&#10;&#10;I came across {{company}} and wanted to connect..."
+                class="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white
+                       resize-none focus:outline-none focus:ring-2 focus:ring-blue-400"></textarea>
+      {% if errors.body_html_template %}<p class="text-red-500 text-[11px] mt-1">{{ errors.body_html_template }}</p>{% endif %}
+      <p class="text-[10px] text-slate-400 mt-1">Variables: <code class="bg-slate-100 px-0.5 rounded">{% verbatim %}{{first_name}}{% endverbatim %}</code> <code class="bg-slate-100 px-0.5 rounded">{% verbatim %}{{company}}{% endverbatim %}</code> <code class="bg-slate-100 px-0.5 rounded">{% verbatim %}{{sender_name}}{% endverbatim %}</code></p>
+    </div>
+  </div>
+
+  <!-- Manual step fields -->
+  <div id="task-fields" class="hidden">
+    <label class="block text-[11px] font-semibold text-slate-500 mb-1">What to do</label>
+    <textarea name="task_description" rows="3"
+              placeholder="Send LinkedIn connection request to {{first_name}} at {{company}}"
+              class="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white
+                     resize-none focus:outline-none focus:ring-2 focus:ring-blue-400"></textarea>
+    {% if errors.task_description %}<p class="text-red-500 text-[11px] mt-1">{{ errors.task_description }}</p>{% endif %}
+  </div>
+
+  <!-- Attachments -->
+  <div id="email-attachments">
+    <label class="flex items-center gap-2 cursor-pointer group py-1">
+      <svg class="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-500 transition-colors flex-shrink-0"
+           fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
+      </svg>
+      <span class="text-xs text-slate-400 group-hover:text-blue-500 transition-colors">
+        Attach files <span class="text-slate-300">· max 5 MB each</span>
+      </span>
+      <input type="file" name="attachments" multiple class="sr-only"
+             onchange="showStepAttachChips(this)">
+    </label>
+    <div id="step-attach-chips" class="flex flex-wrap gap-1.5 mt-1 empty:hidden"></div>
+  </div>
+
+  <input type="hidden" name="send_now" id="send_now_flag" value="0">
+
+  <div class="flex items-center gap-2 pt-1 flex-wrap">
+    <button type="submit" id="save-step-btn"
+            onclick="document.getElementById('send_now_flag').value='0'"
+            class="text-xs font-semibold px-4 py-1.5 rounded-lg border border-slate-200
+                   bg-white text-slate-700 hover:bg-slate-50 transition-colors
+                   disabled:opacity-40 disabled:cursor-not-allowed">
+      Save Step
+    </button>
+    <button type="submit" id="send-now-btn"
+            onclick="document.getElementById('send_now_flag').value='1'"
+            class="inline-flex items-center gap-1.5 text-xs font-semibold px-4 py-1.5
+                   rounded-lg text-white transition-colors"
+            style="background:#30B9EF">
+      <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+      </svg>
+      Save & Send Now
+    </button>
+    <button type="button"
+            onclick="document.getElementById('add-step-panel').classList.add('hidden')"
+            class="text-xs text-slate-400 hover:text-slate-600 ml-1">
+      Cancel
+    </button>
+  </div>
+</form>
+
+<style>
+.step-type-btn input:checked + span {
+  background: #e0f5fc;
+  border-color: #30B9EF;
+  color: #29307C;
+  font-weight: 600;
+}
+</style>
+
+<script>
+function showStepAttachChips(input) {
+  var container = document.getElementById('step-attach-chips');
+  if (!container) return;
+  container.innerHTML = '';
+  Array.from(input.files).forEach(function(f) {
+    var size = f.size < 1048576 ? Math.round(f.size/1024) + ' KB' : (f.size/1048576).toFixed(1) + ' MB';
+    var chip = document.createElement('span');
+    chip.className = 'inline-flex items-center gap-1 text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full';
+    chip.textContent = f.name + ' (' + size + ')';
+    container.appendChild(chip);
+  });
+}
+
+function applyStepTemplate(subject, body) {
+  var s = document.getElementById('step-subject');
+  var b = document.getElementById('step-body');
+  if (s) s.value = subject;
+  if (b) b.value = body;
+}
+
+function toggleStepType(val) {
+  var emailFields  = document.getElementById('email-fields');
+  var taskFields   = document.getElementById('task-fields');
+  var attachments  = document.getElementById('email-attachments');
+  var sendNowBtn   = document.getElementById('send-now-btn');
+  var saveStepBtn  = document.getElementById('save-step-btn');
+  var schedInput   = document.getElementById('scheduled_at_input');
+
+  if (val === 'email') {
+    emailFields.classList.remove('hidden');
+    taskFields.classList.add('hidden');
+    if (attachments) attachments.classList.remove('hidden');
+    if (sendNowBtn) sendNowBtn.classList.remove('hidden');
+    // Disable Save Step if no schedule is set (email with no schedule never auto-sends)
+    updateSaveStepState();
+  } else {
+    emailFields.classList.add('hidden');
+    taskFields.classList.remove('hidden');
+    if (attachments) attachments.classList.add('hidden');
+    // LinkedIn / Task steps: hide Send Now (nothing to auto-send), always allow Save Step
+    if (sendNowBtn) sendNowBtn.classList.add('hidden');
+    if (saveStepBtn) saveStepBtn.disabled = false;
+  }
+}
+
+function updateSaveStepState() {
+  // Only applies when email type is selected
+  var stepTypeEmail = document.querySelector('input[name="step_type"][value="email"]');
+  if (!stepTypeEmail || !stepTypeEmail.checked) return;
+  var schedInput  = document.getElementById('scheduled_at_input');
+  var saveStepBtn = document.getElementById('save-step-btn');
+  if (!saveStepBtn) return;
+  // Disable Save Step if no schedule — the email needs either a schedule or Send Now
+  saveStepBtn.disabled = !schedInput || !schedInput.value;
+}
+
+// Wire up the schedule input so Save Step re-enables once a date is picked
+document.addEventListener('DOMContentLoaded', function() {
+  var schedInput = document.getElementById('scheduled_at_input');
+  if (schedInput) {
+    schedInput.addEventListener('change', updateSaveStepState);
+    schedInput.addEventListener('input', updateSaveStepState);
+  }
+  // Run on load so initial state is correct
+  updateSaveStepState();
+});
+</script>

@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Dead / Inactive Leads — Sailor{% endblock %}
+{% block page_title %}Dead & Inactive Leads{% endblock %}
+
+{% block content %}
+<div class="px-6 py-5">
+
+  <!-- ── Page header ──────────────────────────────────────────────────────── -->
+  <div class="flex items-center justify-between mb-5">
+    <div>
+      <h1 class="text-base font-semibold text-slate-800">Dead & Inactive Leads</h1>
+      <p class="text-xs text-slate-400 mt-0.5">
+        {{ total_leads }} lead{{ total_leads|pluralize }}
+        {% if has_filters %}<span class="ml-1 text-amber-500">· filtered</span>{% endif %}
+      </p>
+    </div>
+    <a href="/pipeline/"
+       class="inline-flex items-center gap-1.5 text-xs font-medium px-4 py-2
+              bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition-colors">
+      ← Active Board
+    </a>
+  </div>
+
+  <!-- ── Filter bar ─────────────────────────────────────────────────────────── -->
+  <form id="dead-filter-form"
+        hx-get="/pipeline/dead/"
+        hx-target="#dead-board-columns"
+        hx-swap="innerHTML"
+        hx-trigger="change, keyup delay:400ms from:#dead-search"
+        class="flex flex-wrap items-center gap-3 mb-6">
+
+    <select name="assigned_to"
+            class="text-xs bg-white border border-slate-200 rounded-lg
+                   px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-400">
+      <option value="">All owners</option>
+      {% for user in users %}
+      <option value="{{ user.id }}" {% if filters.assigned_to == user.id|stringformat:"s" %}selected{% endif %}>
+        {{ user.display_name }}
+      </option>
+      {% endfor %}
+    </select>
+
+    <select name="source"
+            class="text-xs bg-white border border-slate-200 rounded-lg
+                   px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-400">
+      <option value="">All sources</option>
+      {% for src in sources %}
+      <option value="{{ src.id }}" {% if filters.source == src.id|stringformat:"s" %}selected{% endif %}>
+        {{ src.name }}
+      </option>
+      {% endfor %}
+    </select>
+
+    <input id="dead-search" type="text" name="search"
+           value="{{ filters.search }}"
+           placeholder="Search name, email, company…"
+           class="text-xs bg-white border border-slate-200 rounded-lg
+                  px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-400 w-52">
+  </form>
+
+  <!-- ── Board columns ─────────────────────────────────────────────────────── -->
+  <div id="dead-board-columns">
+    {% include "pipeline/partials/dead_board_columns.html" %}
+  </div>
+
+</div>
+{% endblock %}

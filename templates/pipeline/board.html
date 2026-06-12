@@ -1,0 +1,418 @@
+{% extends "base.html" %}
+
+{% block title %}Pipeline | Sailor{% endblock %}
+{% block page_title %}Pipeline Board{% endblock %}
+
+{% block content %}
+
+
+<div class="px-6 py-5">
+
+  <!-- ── Page header ──────────────────────────────────────────────────────── -->
+  <!-- <div class="flex items-center justify-between mb-5">
+    <div>
+      <h1 class="text-base font-semibold text-slate-800">Pipeline</h1>
+      <p class="text-xs text-slate-400 mt-0.5">
+        {{ total_leads }} active lead{{ total_leads|pluralize }}
+        {% if has_filters %}<span class="ml-1 text-blue-500">· filtered</span>{% endif %}
+      </p>
+    </div>
+    <a href="/pipeline/add/"
+       class="inline-flex items-center gap-1.5 text-white
+              text-xs font-semibold px-4 py-2 rounded-lg transition-colors shadow-sm"
+       style="background:#30B9EF">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+      </svg>
+      Add Lead
+    </a>
+  </div> -->
+
+  <!-- ── Filter bar ───────────────────────────────────────────────────────── -->
+  <form id="filter-form"
+        hx-get="/pipeline/"
+        hx-target="#pipeline-views"
+        hx-swap="innerHTML"
+        hx-trigger="change, keyup changed delay:400ms from:[name=search], keyup changed delay:400ms from:[name=city]"
+        hx-indicator="#htmx-spinner"
+        class="flex flex-wrap items-center gap-x-3 gap-y-2 mb-5
+               bg-white border border-slate-200 rounded-xl px-4 py-2.5 shadow-sm">
+
+    <!-- Search icon -->
+    <svg class="w-3.5 h-3.5 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
+    </svg>
+
+    <!-- Name / email search -->
+    <input type="text" name="search" value="{{ filters.search }}"
+           placeholder="Search name, email, company…"
+           class="text-xs text-slate-700 placeholder-slate-400 bg-transparent border-none outline-none w-44" />
+
+    <div class="w-px h-4 bg-slate-200 hidden sm:block"></div>
+
+    <!-- Owner filter -->
+    <select name="assigned_to"
+            class="text-xs text-slate-600 bg-transparent border-none outline-none cursor-pointer">
+      <option value="">All owners</option>
+      {% for user in users %}
+      <option value="{{ user.id }}"
+              {% if filters.assigned_to == user.id|stringformat:"s" %}selected{% endif %}>
+        {{ user.display_name }}
+      </option>
+      {% endfor %}
+    </select>
+
+    <div class="w-px h-4 bg-slate-200 hidden sm:block"></div>
+
+    <!-- Source filter -->
+    <select name="source"
+            class="text-xs text-slate-600 bg-transparent border-none outline-none cursor-pointer">
+      <option value="">All sources</option>
+      {% for src in sources %}
+      <option value="{{ src.id }}"
+              {% if filters.source == src.id|stringformat:"s" %}selected{% endif %}>
+        {{ src.name }}
+      </option>
+      {% endfor %}
+    </select>
+
+    <div class="w-px h-4 bg-slate-200 hidden sm:block"></div>
+
+    <!-- City filter -->
+    <input type="text" name="city" value="{{ filters.city }}"
+           placeholder="City…"
+           class="text-xs text-slate-700 placeholder-slate-400 bg-transparent border-none outline-none w-24" />
+
+    {% if batches %}
+    <div class="w-px h-4 bg-slate-200 hidden sm:block"></div>
+
+    <!-- Batch filter -->
+    <select name="batch"
+            class="text-xs text-slate-600 bg-transparent border-none outline-none cursor-pointer max-w-36 truncate">
+      <option value="">All batches</option>
+      {% for b in batches %}
+      <option value="{{ b.id }}"
+              {% if filters.batch == b.id|stringformat:"s" %}selected{% endif %}>
+        {{ b.batch_name }}
+      </option>
+      {% endfor %}
+    </select>
+    {% endif %}
+
+    <!-- Clear filters -->
+ {% if has_filters %}
+    <a href="/pipeline/"
+       class="text-xs text-slate-400 hover:text-red-500 transition-colors flex items-center gap-1">
+      <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+      </svg>
+      Clear
+    </a>
+    {% endif %}
+
+    <div class="ml-auto flex items-center gap-4">
+      <p class="text-xs text-slate-400">
+        {{ total_leads }} active lead{{ total_leads|pluralize }}
+        {% if has_filters %}<span class="ml-1 text-blue-500">· filtered</span>{% endif %}
+      </p>
+
+      <!-- View toggle -->
+      <div class="flex items-center border border-slate-200 rounded-lg overflow-hidden bg-white">
+        <button id="btn-kanban"
+                onclick="setView('kanban')"
+                title="Kanban view"
+                class="px-2.5 py-1.5 transition-colors view-btn-kanban text-slate-400 hover:text-slate-600">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 0a2 2 0 012-2h2a2 2 0 012 2v10a2 2 0 01-2 2h-2a2 2 0 01-2-2"/>
+          </svg>
+        </button>
+        <button id="btn-list"
+                onclick="setView('list')"
+                title="List view"
+                class="px-2.5 py-1.5 transition-colors view-btn-list bg-slate-100 text-slate-700">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
+          </svg>
+        </button>
+      </div>
+
+      <a href="/pipeline/add/"
+         class="inline-flex items-center gap-1.5 text-white
+                text-xs font-semibold px-4 py-2 rounded-lg transition-colors shadow-sm"
+         style="background:#30B9EF">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+        </svg>
+        Add Lead
+      </a>
+    </div>
+
+  </form>
+
+  <!-- Both views live inside #pipeline-views so the filter HTMX swap updates both -->
+  <div id="pipeline-views">
+    {% include "pipeline/partials/pipeline_views.html" %}
+  </div>
+
+  <!-- ── Multi-select toolbar (shown when leads are checked) ─────────────── -->
+  <div id="select-toolbar"
+       class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-50
+              bg-slate-900 text-white rounded-2xl shadow-2xl px-5 py-3
+              flex items-center gap-4 text-xs font-semibold">
+    <span id="select-count" class="text-slate-300">0 selected</span>
+    <div class="w-px h-4 bg-slate-700"></div>
+
+    <!-- Move to stage -->
+    <div class="relative" id="move-to-wrap">
+      <button onclick="document.getElementById('move-to-dropdown').classList.toggle('hidden')"
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg
+                     bg-slate-700 hover:bg-slate-600 text-white transition-colors">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M17 8l4 4m0 0l-4 4m4-4H3"/>
+        </svg>
+        Move to ▾
+      </button>
+      <div id="move-to-dropdown"
+           class="hidden absolute bottom-full mb-2 left-0 w-44 bg-white border border-slate-200
+                  rounded-xl shadow-xl z-50 overflow-hidden">
+        {% for stage, leads in stages_with_leads %}
+        <button onclick="bulkMoveTo('{{ stage.id }}', '{{ stage.name }}')"
+                class="w-full text-left px-4 py-2.5 text-xs text-slate-700
+                       hover:bg-slate-50 transition-colors">
+          {{ stage.name }}
+        </button>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Create campaign -->
+    <a id="btn-create-campaign"
+       href="#"
+       class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg
+              transition-colors text-white"
+       style="background:#30B9EF">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+      </svg>
+      Create Campaign
+    </a>
+
+    <!-- Move result flash -->
+    <span id="move-result" class="text-emerald-400 hidden"></span>
+
+    <button onclick="clearSelection()"
+            class="text-slate-400 hover:text-white transition-colors ml-1">
+      ✕ Clear
+    </button>
+  </div>
+
+</div>
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+// ── Init Sortable on all columns ────────────────────────────────────────────
+function initSortable() {
+  document.querySelectorAll('.kanban-column:not([data-sortable-init])').forEach(col => {
+    col.setAttribute('data-sortable-init', '1');
+    new Sortable(col, {
+      group:          'leads',
+      animation:      150,
+      ghostClass:     'sortable-ghost',
+      chosenClass:    'sortable-chosen',
+      // Hide the "No leads" placeholder while dragging over an empty column
+      onAdd: function(evt) {
+        const placeholder = evt.to.querySelector('.empty-placeholder');
+        if (placeholder) placeholder.remove();
+      },
+      onEnd: function(evt) {
+        if (evt.from === evt.to) return; // Same column — nothing to do
+
+        const leadId   = evt.item.dataset.leadId;
+        const stageId  = evt.to.dataset.stageId;
+        const csrf     = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+
+        // HTMX POST: move lead to new stage, swap card in-place
+        htmx.ajax('POST', `/pipeline/move/${leadId}/`, {
+          target: evt.item,
+          swap:   'outerHTML',
+          values: { stage_id: stageId, csrfmiddlewaretoken: csrf }
+        });
+
+        // Update column count badges
+        refreshColumnCounts();
+      }
+    });
+  });
+}
+
+function refreshColumnCounts() {
+  document.querySelectorAll('[data-stage-id]').forEach(col => {
+    const count  = col.querySelectorAll('[data-lead-id]').length;
+    const badge  = col.closest('.kanban-col-wrapper')?.querySelector('.stage-count');
+    if (badge) badge.textContent = count;
+  });
+}
+
+// Run on initial load
+document.addEventListener('DOMContentLoaded', initSortable);
+
+// Re-run after HTMX swaps the columns (filter change)
+document.body.addEventListener('htmx:afterSwap', function(evt) {
+  if (evt.detail.target.id === 'pipeline-views') {
+    // Re-apply whichever view was active before the swap
+    var saved = sessionStorage.getItem('pipelineView');
+    setView(saved === 'kanban' ? 'kanban' : 'list');
+    initSortable();
+    refreshColumnCounts();
+  }
+});
+
+// ── View toggle ─────────────────────────────────────────────────────────────
+function setView(view) {
+  const kanban  = document.getElementById('view-kanban');
+  const list    = document.getElementById('view-list');
+  const btnK    = document.getElementById('btn-kanban');
+  const btnL    = document.getElementById('btn-list');
+  if (view === 'kanban') {
+    kanban.classList.remove('hidden');
+    list.classList.add('hidden');
+    btnK.classList.add('bg-slate-100', 'text-slate-700');
+    btnK.classList.remove('text-slate-400');
+    btnL.classList.remove('bg-slate-100', 'text-slate-700');
+    btnL.classList.add('text-slate-400');
+    clearSelection();
+    sessionStorage.setItem('pipelineView', 'kanban');
+  } else {
+    kanban.classList.add('hidden');
+    list.classList.remove('hidden');
+    btnL.classList.add('bg-slate-100', 'text-slate-700');
+    btnL.classList.remove('text-slate-400');
+    btnK.classList.remove('bg-slate-100', 'text-slate-700');
+    btnK.classList.add('text-slate-400');
+    sessionStorage.setItem('pipelineView', 'list');
+  }
+}
+
+// Restore last view on load — default is list
+document.addEventListener('DOMContentLoaded', function() {
+  const saved = sessionStorage.getItem('pipelineView');
+  if (saved === 'kanban') setView('kanban');
+});
+
+// ── Multi-select ─────────────────────────────────────────────────────────────
+let selectedIds = new Set();
+
+function toggleLead(id, checked) {
+  if (checked) selectedIds.add(id);
+  else selectedIds.delete(id);
+  updateToolbar();
+}
+
+function toggleAllLeads(checked) {
+  // Only toggle VISIBLE rows (not hidden by stage filter)
+  document.querySelectorAll('.lead-row:not(.hidden) .lead-checkbox').forEach(cb => {
+    cb.checked = checked;
+    if (checked) selectedIds.add(cb.dataset.leadId);
+    else selectedIds.delete(cb.dataset.leadId);
+  });
+  updateToolbar();
+}
+
+function clearSelection() {
+  selectedIds.clear();
+  document.querySelectorAll('.lead-checkbox').forEach(cb => cb.checked = false);
+  const all = document.getElementById('select-all');
+  if (all) all.checked = false;
+  updateToolbar();
+}
+
+function updateToolbar() {
+  const toolbar = document.getElementById('select-toolbar');
+  const count   = document.getElementById('select-count');
+  const btn     = document.getElementById('btn-create-campaign');
+  if (selectedIds.size > 0) {
+    toolbar.classList.remove('hidden');
+    count.textContent = selectedIds.size + ' selected';
+    const ids = Array.from(selectedIds).map(id => 'lead_ids=' + id).join('&');
+    btn.href = '/campaigns/new/?' + ids;
+  } else {
+    toolbar.classList.add('hidden');
+    document.getElementById('move-to-dropdown').classList.add('hidden');
+  }
+}
+
+// ── Bulk move to stage ───────────────────────────────────────────────────────
+function bulkMoveTo(stageId, stageName) {
+  document.getElementById('move-to-dropdown').classList.add('hidden');
+  if (!selectedIds.size) return;
+
+  const csrf = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+  const body = new URLSearchParams();
+  body.append('csrfmiddlewaretoken', csrf);
+  body.append('stage_id', stageId);
+  selectedIds.forEach(id => body.append('lead_ids', id));
+
+  fetch('/leads/bulk-move/', { method: 'POST', body })
+    .then(r => r.json())
+    .then(data => {
+      const result = document.getElementById('move-result');
+      result.textContent = `✓ ${data.moved} lead${data.moved !== 1 ? 's' : ''} moved to ${data.stage}`;
+      result.classList.remove('hidden');
+      setTimeout(() => {
+        result.classList.add('hidden');
+        clearSelection();
+        // Reload the page to reflect stage changes
+        window.location.reload();
+      }, 1800);
+    })
+    .catch(() => alert('Move failed. Please try again.'));
+}
+
+// ── Stage filter for list view ───────────────────────────────────────────────
+function filterByStage(stageId) {
+  // Update tab styles
+  document.querySelectorAll('.stage-tab').forEach(btn => {
+    btn.classList.remove('bg-slate-900', 'text-white');
+    btn.classList.add('bg-white', 'border', 'border-slate-200', 'text-slate-600');
+  });
+  const active = stageId === 'all'
+    ? document.querySelector('.stage-tab-all')
+    : document.querySelector(`.stage-tab[data-stage-id="${stageId}"]`);
+  if (active) {
+    active.classList.remove('bg-white', 'border', 'border-slate-200', 'text-slate-600');
+    active.classList.add('bg-slate-900', 'text-white');
+  }
+
+  // Filter rows
+  document.querySelectorAll('.lead-row').forEach(row => {
+    if (stageId === 'all' || row.dataset.stageId === stageId) {
+      row.classList.remove('hidden');
+    } else {
+      row.classList.add('hidden');
+    }
+  });
+
+  // Uncheck hidden rows from selection
+  document.querySelectorAll('.lead-row.hidden .lead-checkbox').forEach(cb => {
+    cb.checked = false;
+    selectedIds.delete(cb.dataset.leadId);
+  });
+  updateToolbar();
+}
+
+// Close move-to dropdown when clicking outside
+document.addEventListener('click', function(e) {
+  const wrap = document.getElementById('move-to-wrap');
+  if (wrap && !wrap.contains(e.target)) {
+    document.getElementById('move-to-dropdown').classList.add('hidden');
+  }
+});
+</script>
+{% endblock %}

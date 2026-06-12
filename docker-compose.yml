@@ -1,0 +1,79 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: sailor-lms:local
+    container_name: sailor_web
+    ports:
+      - "50000:50000"
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.development
+      SECRET_KEY: 
+      DB_NAME: ${DB_NAME:-lms_db}
+      DB_USER: ${DB_USER:-lms_user}
+      DB_PASSWORD: ${DB_PASSWORD:-tiger}
+      DB_HOST: db
+      DB_PORT: 5432
+      REDIS_URL: redis://redis:6379/0
+      ALLOWED_HOSTS: localhost,127.0.0.1,0.0.0.0
+      AZURE_AD_TENANT_ID: ${AZURE_AD_TENANT_ID:-}
+      AZURE_AD_CLIENT_ID: ${AZURE_AD_CLIENT_ID:-}
+      AZURE_AD_CLIENT_SECRET: ${AZURE_AD_CLIENT_SECRET:-}
+      AZURE_AD_REDIRECT_URI: http://localhost:50000/auth/callback/
+      AZURE_AD_SCOPES: ${AZURE_AD_SCOPES:-User.Read,Mail.Send}
+      WEBPUSH_VAPID_PUBLIC_KEY: ${WEBPUSH_VAPID_PUBLIC_KEY:-}
+      WEBPUSH_VAPID_PRIVATE_KEY: /run/secrets/webpush_private_key.pem
+      WEBPUSH_VAPID_SUBJECT: ${WEBPUSH_VAPID_SUBJECT:-mailto:admin@sailor.local}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    volumes:
+      - media_data:/app/media
+      - staticfiles_data:/app/staticfiles
+      - ./private_key.pem:/run/secrets/webpush_private_key.pem:ro
+    depends_on:
+      - db
+      - redis
+    restart: unless-stopped
+
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: sailor_db
+    environment:
+      POSTGRES_DB: ${DB_NAME:-lms_db}
+      POSTGRES_USER: ${DB_USER:-lms_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-tiger}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: sailor_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+  pgadmin:
+    image: dpage/pgadmin4:8
+    container_name: sailor_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: "adarsha.yh@datalyzerint.com"
+      PGADMIN_DEFAULT_PASSWORD: "DLisgreat@2008"
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - db
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  pgadmin_data:
+  media_data:
+  staticfiles_data:

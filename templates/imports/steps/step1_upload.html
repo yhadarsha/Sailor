@@ -1,0 +1,123 @@
+{% comment %}Step 1 — File upload. Submits to /imports/upload/ via HTMX.{% endcomment %}
+
+<form id="upload-form"
+      hx-post="/imports/upload/"
+      hx-target="#wizard-body"
+      hx-swap="innerHTML"
+      hx-encoding="multipart/form-data"
+      hx-indicator="#upload-spinner"
+      enctype="multipart/form-data">
+
+  {% csrf_token %}
+
+  <!-- Drop zone -->
+  <div id="drop-zone"
+       class="border-2 border-dashed border-slate-300 rounded-2xl
+              bg-white hover:border-blue-400 hover:bg-blue-50/30
+              transition-all duration-200 cursor-pointer
+              flex flex-col items-center justify-center
+              py-16 px-8 text-center"
+       onclick="document.getElementById('file-input').click()">
+
+    <!-- Icon -->
+    <div class="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center mb-4">
+      <svg class="w-7 h-7 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+              d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586
+                 a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+      </svg>
+    </div>
+
+    <p class="text-sm font-semibold text-slate-700 mb-1">
+      Drop your file here, or <span class="text-blue-600">browse</span>
+    </p>
+    <p class="text-xs text-slate-400">.csv or .xlsx · max 10 MB</p>
+
+    <!-- Selected file name feedback -->
+    <div id="file-selected" class="hidden mt-4 flex items-center gap-2 bg-blue-50
+                                   border border-blue-200 rounded-lg px-4 py-2">
+      <svg class="w-4 h-4 text-blue-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586
+                 a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+      </svg>
+      <span id="file-name-label" class="text-sm font-medium text-blue-700"></span>
+    </div>
+
+    <input id="file-input" type="file" name="file"
+           accept=".csv,.xlsx,.xls"
+           class="hidden"
+           onchange="handleFileSelect(this)" />
+  </div>
+
+  <!-- Upload button -->
+  <div class="mt-5 flex items-center justify-between">
+    <p class="text-xs text-slate-400">
+      First row must contain column headers (Name, Email, Company, etc.)
+    </p>
+    <button type="submit"
+            id="upload-btn"
+            disabled
+            class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700
+                   disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed
+                   text-white text-sm font-medium px-5 py-2.5 rounded-xl
+                   transition-colors shadow-sm">
+      <span id="upload-spinner" class="htmx-indicator">
+        <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+        </svg>
+      </span>
+      Parse File
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+      </svg>
+    </button>
+  </div>
+
+</form>
+
+<script>
+// Drag-and-drop support
+const dropZone = document.getElementById('drop-zone');
+
+dropZone.addEventListener('dragover', e => {
+  e.preventDefault();
+  dropZone.classList.add('border-blue-400', 'bg-blue-50/40');
+});
+dropZone.addEventListener('dragleave', () => {
+  dropZone.classList.remove('border-blue-400', 'bg-blue-50/40');
+});
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('border-blue-400', 'bg-blue-50/40');
+  const file = e.dataTransfer.files[0];
+  if (file) {
+    const input = document.getElementById('file-input');
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    input.files = dt.files;
+    handleFileSelect(input);
+  }
+});
+
+function handleFileSelect(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  const allowed = ['.csv', '.xlsx', '.xls'];
+  const ext = '.' + file.name.split('.').pop().toLowerCase();
+  if (!allowed.includes(ext)) {
+    alert('Please select a .csv or .xlsx file.');
+    input.value = '';
+    return;
+  }
+
+  document.getElementById('file-name-label').textContent = file.name;
+  document.getElementById('file-selected').classList.remove('hidden');
+  document.getElementById('upload-btn').disabled = false;
+  document.getElementById('upload-btn').classList.remove(
+    'disabled:bg-slate-200', 'disabled:text-slate-400', 'disabled:cursor-not-allowed'
+  );
+}
+</script>

@@ -1,0 +1,40 @@
+# ── Core ──────────────────────────────────────────────────────────────────────
+Django==5.0.6
+psycopg2-binary==2.9.10         # PostgreSQL adapter (2.9.10+ has Python 3.13 wheels)
+
+# ── Environment & Config ──────────────────────────────────────────────────────
+django-environ==0.11.2           # 12-factor .env handling
+
+# ── REST API ──────────────────────────────────────────────────────────────────
+djangorestframework==3.15.2      # REST API layer (for future Angular integration)
+djangorestframework-simplejwt==5.3.1  # JWT auth (Azure AD token validation)
+
+# ── AI / Vector ───────────────────────────────────────────────────────────────
+pgvector==0.3.2                  # Native pgvector support for Django ORM
+
+# ── Import / Export ───────────────────────────────────────────────────────────
+django-import-export==4.1.0      # Excel/CSV import with column mapping
+openpyxl==3.1.5                  # Excel read/write engine
+
+# ── Async / Background Tasks ──────────────────────────────────────────────────
+celery==5.4.0                    # Async task queue (Phase 2 automation)
+redis==5.0.7                     # Celery broker + cache backend
+django-celery-beat==2.6.0        # Periodic task scheduling
+
+# ── Azure AD SSO ──────────────────────────────────────────────────────────────
+msal==1.36.0                     # Microsoft Authentication Library (Azure AD SSO)
+
+# ── Utilities ─────────────────────────────────────────────────────────────────
+django-extensions==3.2.3         # shell_plus, graph_models, etc.
+django-filter==24.2              # Queryset filtering for APIs
+Pillow==10.4.0                   # Image handling (if needed for attachments)
+python-dateutil==2.9.0.post0     # Robust date parsing for imports
+
+# ── Dev Tools ─────────────────────────────────────────────────────────────────
+ipython==8.26.0                  # Better shell experience
+
+# ── Container / Production Runtime ──────────────────────────────────────────
+gunicorn==23.0.0                 # WSGI server for Docker/runtime use
+whitenoise==6.7.0                # Static file serving behind Gunicorn
+python-json-logger==2.0.7        # JSON logging formatter used by production settings
+pywebpush==2.0.3                 # Web Push notifications for PWA call handoff

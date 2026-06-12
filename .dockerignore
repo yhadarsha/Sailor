@@ -1,0 +1,15 @@
+.git
+.gitignore
+.env
+__pycache__/
+*.py[cod]
+*.sqlite3
+*.pem
+lmsenv/
+staticfiles/
+media/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+Dockerfile
+docker-compose.yml

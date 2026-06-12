@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Import Leads | LMS{% endblock %}
+
+{% block content %}
+<div class="max-w-8xl mx-auto px-6 py-8">
+
+  <!-- ── Page header ──────────────────────────────────────────────────────── -->
+  <div class="mb-8">
+    <h1 class="text-lg font-semibold text-slate-800">Import Leads</h1>
+    <p class="text-sm text-slate-400 mt-0.5">Upload a .csv or .xlsx file — we'll detect your columns automatically.</p>
+  </div>
+
+  <!-- ── Step indicator ───────────────────────────────────────────────────── -->
+  <div id="step-indicator" class="flex items-center gap-0 mb-8">
+    {% include "imports/partials/step_indicator.html" with current_step=1 %}
+  </div>
+
+  <!-- ── Wizard body (HTMX target) ────────────────────────────────────────── -->
+  <div id="wizard-body">
+    {% include "imports/steps/step1_upload.html" %}
+  </div>
+
+</div>
+{% endblock %}

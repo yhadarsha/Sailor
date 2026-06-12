@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}New Campaign | Sailor{% endblock %}
+{% block page_title %}New Campaign{% endblock %}
+
+{% block content %}
+<div class="px-6 py-5 max-w-2xl">
+
+  <div class="flex items-center gap-3 mb-6">
+    <a href="/campaigns/" class="text-xs text-slate-400 hover:text-slate-600">← Campaigns</a>
+  </div>
+
+  <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+    <h2 class="text-base font-bold text-slate-800 mb-1">Create Campaign</h2>
+    <p class="text-xs text-slate-400 mb-5">Give it a name, set your goal, then add email steps.</p>
+
+    {% if pre_leads %}
+    <div class="mb-5 p-3 bg-blue-50 border border-blue-100 rounded-xl">
+      <p class="text-xs font-semibold text-blue-700 mb-2">
+        {{ pre_leads|length }} lead{{ pre_leads|length|pluralize }} pre-selected from pipeline:
+      </p>
+      <div class="flex flex-wrap gap-1.5">
+        {% for lead in pre_leads %}
+        <span class="text-[11px] bg-white border border-blue-200 text-blue-700
+                     px-2 py-0.5 rounded-full font-medium">
+          {{ lead.first_name }} {{ lead.last_name }}
+          {% if lead.company %}<span class="text-blue-400">· {{ lead.company.name }}</span>{% endif %}
+        </span>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <form method="POST">
+      {% csrf_token %}
+      {% for id in pre_lead_ids %}
+      <input type="hidden" name="pre_lead_ids" value="{{ id }}">
+      {% endfor %}
+
+      <!-- Name -->
+      <div class="mb-4">
+        <label class="block text-xs font-semibold text-slate-600 mb-1">Campaign Name</label>
+        <input type="text" name="name"
+               value="{{ post.name|default:suggested_name }}"
+               placeholder="e.g. eager-tesla"
+               class="w-full text-sm border border-slate-200 rounded-lg px-3 py-2
+                      focus:outline-none focus:ring-2 focus:ring-blue-400 font-mono">
+        {% if errors.name %}
+        <p class="text-xs text-red-500 mt-1">{{ errors.name }}</p>
+        {% endif %}
+        <p class="text-[11px] text-slate-400 mt-1">Auto-generated name — edit freely</p>
+      </div>
+
+      <!-- Goal -->
+      <div class="mb-4">
+        <label class="block text-xs font-semibold text-slate-600 mb-1">Goal <span class="text-slate-400 font-normal">(optional)</span></label>
+        <input type="text" name="goal"
+               value="{{ post.goal|default:'' }}"
+               placeholder="e.g. Book a demo call"
+               class="w-full text-sm border border-slate-200 rounded-lg px-3 py-2
+                      focus:outline-none focus:ring-2 focus:ring-blue-400">
+      </div>
+
+      <!-- Exit on reply -->
+      <div class="mb-6">
+        <label class="flex items-center gap-2.5 cursor-pointer group">
+          <input type="checkbox" name="exit_on_reply"
+                 {% if post.exit_on_reply != 'off' %}checked{% endif %}
+                 class="w-4 h-4 rounded border-slate-300 text-blue-500 focus:ring-blue-400">
+          <span class="text-xs font-medium text-slate-700">
+            Auto-exit leads when they reply
+          </span>
+        </label>
+        <p class="text-[11px] text-slate-400 mt-1 ml-6.5">
+          When a lead replies to a campaign email, they're automatically removed from further steps.
+        </p>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <button type="submit"
+                class="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg text-sm
+                       font-semibold text-white transition-colors"
+                style="background:#30B9EF">
+          Create Campaign →
+        </button>
+        <a href="/campaigns/" class="text-xs text-slate-400 hover:text-slate-600">Cancel</a>
+      </div>
+    </form>
+  </div>
+
+</div>
+{% endblock %}

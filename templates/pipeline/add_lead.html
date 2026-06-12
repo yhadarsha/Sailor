@@ -1,0 +1,358 @@
+{% extends "base.html" %}
+{% block title %}Add Lead | Sailor{% endblock %}
+{% block page_title %}Add New Lead{% endblock %}
+
+{% block content %}
+<div class="al-wrap">
+
+  <!-- ── Header ──────────────────────────────────────────────────────────── -->
+  <div class="al-header">
+    <div>
+      <h1 class="al-title">Add New Lead</h1>
+      <p class="al-sub">Fill in what you know — everything except first name is optional.</p>
+    </div>
+    <a href="/pipeline/" class="al-back">← Back to Board</a>
+  </div>
+
+  <form method="post" action="/pipeline/add/" class="al-form">
+    {% if errors %}
+    <div class="al-error-banner">
+      {% for field, msg in errors.items %}
+      <span class="al-error-item">
+        <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M12 9v2m0 4h.01M12 3a9 9 0 110 18A9 9 0 0112 3z"/>
+        </svg>
+        {{ msg }}
+      </span>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% csrf_token %}
+
+    <!-- ── Two-column body ─────────────────────────────────────────────── -->
+    <div class="al-cols">
+
+      <!-- LEFT — Contact Details ---------------------------------------- -->
+      <div class="al-card">
+        <h2 class="al-section-title">Contact Details</h2>
+
+        <div class="al-row-2">
+          <div class="al-field">
+            <label class="al-label">First Name <span class="al-req">*</span></label>
+            <input type="text" name="first_name" required placeholder="Arjun" class="al-input">
+          </div>
+          <div class="al-field">
+            <label class="al-label">Last Name</label>
+            <input type="text" name="last_name" placeholder="Mehta" class="al-input">
+          </div>
+        </div>
+
+        <div class="al-row-2">
+          <div class="al-field">
+            <label class="al-label">Email</label>
+            <input type="email" name="email" placeholder="arjun@company.com" class="al-input">
+          </div>
+          <div class="al-field">
+            <label class="al-label">Phone</label>
+            <input type="text" name="phone" placeholder="+91 9876543210" class="al-input">
+          </div>
+        </div>
+
+        <div class="al-field">
+          <label class="al-label">Job Title / Designation</label>
+          <input type="text" name="title" placeholder="VP Engineering" class="al-input">
+        </div>
+
+        <div class="al-field">
+          <label class="al-label">LinkedIn URL</label>
+          <input type="url" name="linkedin_url"
+                 placeholder="https://linkedin.com/in/arjunmehta" class="al-input">
+        </div>
+      </div>
+
+      <!-- RIGHT — Company, Location & Assignment ----------------------- -->
+      <div class="al-right-col">
+
+        <!-- Company & Location -->
+        <div class="al-card">
+          <h2 class="al-section-title">Company &amp; Location</h2>
+
+          <div class="al-field">
+            <label class="al-label">Company Name</label>
+            <input type="text" name="company_name" placeholder="Tata Technologies" class="al-input">
+          </div>
+
+          <div class="al-row-3">
+            <div class="al-field">
+              <label class="al-label">City</label>
+              <input type="text" name="city" placeholder="Bangalore" class="al-input">
+            </div>
+            <div class="al-field">
+              <label class="al-label">State</label>
+              <input type="text" name="state" placeholder="Karnataka" class="al-input">
+            </div>
+            <div class="al-field">
+              <label class="al-label">Country</label>
+              <input type="text" name="country" value="India" class="al-input">
+            </div>
+          </div>
+        </div>
+
+        <!-- Assignment -->
+        <div class="al-card">
+          <h2 class="al-section-title">Assignment</h2>
+
+          <div class="al-field">
+            <label class="al-label">Batch Name <span class="al-req">*</span></label>
+            <input type="text" name="batch_name" required
+                   placeholder="e.g. LinkedIn Pune June 2026"
+                   value="{{ prev.batch_name|default:'' }}"
+                   class="al-input{% if errors.batch_name %} al-input-error{% endif %}">
+            <p style="font-size:11px;color:#94a3b8;margin-top:3px">A label to group and filter these leads in the pipeline.</p>
+          </div>
+
+          <div class="al-row-3">
+            <div class="al-field">
+              <label class="al-label">Source <span class="al-req">*</span></label>
+              <select name="source_id" required class="al-select{% if errors.source_id %} al-input-error{% endif %}">
+                <option value="">— Select —</option>
+                {% for src in sources %}
+                <option value="{{ src.id }}" {% if prev.source_id == src.id|stringformat:"s" %}selected{% endif %}>{{ src.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="al-field">
+              <label class="al-label">Assign To <span class="al-req">*</span></label>
+              <select name="assigned_to_id" required class="al-select{% if errors.assigned_to_id %} al-input-error{% endif %}">
+                <option value="">— Unassigned —</option>
+                {% for user in users %}
+                <option value="{{ user.id }}"
+                        {% if prev.assigned_to_id == user.id|stringformat:"s" or not prev and current_user_id == user.id|stringformat:"s" %}selected{% endif %}>
+                  {{ user.display_name }}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="al-field">
+              <label class="al-label">Starting Stage</label>
+              <select name="stage_id" class="al-select">
+                {% for stage in stages %}
+                <option value="{{ stage.id }}" {% if forloop.first %}selected{% endif %}>
+                  {{ stage.name }}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /al-right-col -->
+    </div><!-- /al-cols -->
+
+    <!-- ── Submit bar ─────────────────────────────────────────────────── -->
+    <div class="al-actions">
+      <button type="submit" class="al-btn-primary">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+        </svg>
+        Add Lead
+      </button>
+      <a href="/pipeline/" class="al-btn-cancel">Cancel</a>
+    </div>
+
+  </form>
+</div>
+
+<style>
+/* ── Page shell ─────────────────────────────────────────────────────────── */
+.al-wrap {
+  padding: 24px 28px;
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  overflow: hidden;
+}
+
+/* ── Header ─────────────────────────────────────────────────────────────── */
+.al-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+.al-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0;
+}
+.al-sub {
+  font-size: 12px;
+  color: #94a3b8;
+  margin: 3px 0 0;
+}
+.al-back {
+  font-size: 12px;
+  color: #94a3b8;
+  text-decoration: none;
+  transition: color .15s;
+  white-space: nowrap;
+}
+.al-back:hover { color: #475569; }
+
+/* ── Form fills remaining height ────────────────────────────────────────── */
+.al-form {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* ── Two-column layout ──────────────────────────────────────────────────── */
+.al-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ── Right col stacks two cards vertically ──────────────────────────────── */
+.al-right-col {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+}
+
+/* ── Card ───────────────────────────────────────────────────────────────── */
+.al-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+}
+.al-section-title {
+  font-size: 10px;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: .7px;
+  margin: 0 0 2px;
+}
+
+/* ── Field rows ─────────────────────────────────────────────────────────── */
+.al-row-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.al-row-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+}
+.al-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.al-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+}
+.al-req { color: #f87171; }
+
+/* ── Inputs & selects ───────────────────────────────────────────────────── */
+.al-input,
+.al-select {
+  width: 100%;
+  font-size: 13px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 7px 10px;
+  color: #334155;
+  box-sizing: border-box;
+  transition: border-color .15s, box-shadow .15s;
+  outline: none;
+}
+.al-input:focus,
+.al-select:focus {
+  border-color: #30B9EF;
+  box-shadow: 0 0 0 3px rgba(48,185,239,.12);
+  background: #fff;
+}
+.al-input::placeholder { color: #cbd5e1; }
+
+/* ── Submit bar ─────────────────────────────────────────────────────────── */
+.al-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  padding-bottom: 4px;
+}
+.al-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 22px;
+  background: #30B9EF;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s;
+}
+.al-btn-primary:hover { background: #0796ce; }
+.al-btn-cancel {
+  padding: 9px 18px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #64748b;
+  text-decoration: none;
+  transition: background .15s;
+}
+.al-btn-cancel:hover { background: #f8fafc; }
+
+/* ── Validation ────────────────────────────────────────────────────────── */
+.al-error-banner {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  padding: 10px 14px;
+  flex-shrink: 0;
+}
+.al-error-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #dc2626;
+}
+.al-input-error {
+  border-color: #f87171 !important;
+  background: #fff5f5 !important;
+}
+</style>
+{% endblock %}

@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block title %}Call {{ name }} | Sailor{% endblock %}
+{% block page_title %}Make Call{% endblock %}
+
+{% block content %}
+<div style="max-width:520px;margin:40px auto;padding:0 20px;">
+  <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:24px;text-align:center;box-shadow:0 1px 3px rgba(15,23,42,.08);">
+    <div style="font-size:13px;color:#64748b;font-weight:700;text-transform:uppercase;margin-bottom:8px;">Ready to call</div>
+    <h1 style="font-size:24px;font-weight:800;color:#0f172a;margin:0 0 6px;">{{ name }}</h1>
+    <p style="font-size:16px;color:#334155;margin:0 0 22px;">{{ phone }}</p>
+    {% if phone %}
+      <a href="tel:{{ phone }}"
+         style="display:inline-flex;align-items:center;justify-content:center;background:#30B9EF;color:#fff;text-decoration:none;border-radius:10px;padding:12px 22px;font-weight:800;">
+        Call Now
+      </a>
+      <script>
+        setTimeout(() => { window.location.href = 'tel:{{ phone|escapejs }}'; }, 350);
+      </script>
+    {% else %}
+      <div style="font-size:14px;color:#b91c1c;">No phone number was provided.</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

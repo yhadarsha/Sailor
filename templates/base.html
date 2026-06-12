@@ -1,0 +1,730 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#29307C" />
+  <title>{% block title %}Sailor | LMS{% endblock %}</title>
+  <link rel="icon" type="image/png" href="{% static 'images/favicon.png' %}">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- HTMX -->
+  <script src="https://unpkg.com/htmx.org@1.9.12" defer></script>
+
+  <!-- SortableJS (drag-and-drop) -->
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js" defer></script>
+
+  <!-- Blaze / Sailor icon font (dl-icons) -->
+  <link rel="stylesheet" href="{% static 'css/dl-icons.css' %}">
+   
+
+  <style>
+    /* ── Brand tokens ─────────────────────────────────────────── */
+    :root {
+      --primary:    #30B9EF;
+      --secondary:  #29307C;
+      --secondary-dark: #1D2E79;
+      --secondary-darker: #161b4a;
+      --light:      #ffffff;
+    }
+
+    /* ── Full-height app shell ───────────────────────────────── */
+    html, body { height: 100%; margin: 0; font-family: 'Roboto', 'Segoe UI', sans-serif; }
+
+    .app-shell {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      background: #f4f6fb;
+    }
+
+    /* ── Top header ──────────────────────────────────────────── */
+.app-header {
+  height: 45px;
+  min-height: 45px;
+  display: flex;
+  align-items: center;
+  padding: 0 0px;
+  z-index: 100;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+  
+  /* CRITICAL: Allows the absolutely positioned version child to stay inside the header */
+  position: relative; 
+}
+
+/* Add this new rule to your CSS stylesheet */
+.app-header .version-number {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  color: red;
+  font-weight: bold; /* Optional: matches your red indicator look */
+  pointer-events: none; /* Optional: prevents it from blocking clicks on elements underneath it */
+}
+
+    .app-header .logo-text {
+      font-size: 20px;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: 2px;
+      font-family: 'Segoe UI', sans-serif;
+    }
+
+        .sailor-logo {
+        height: 45px; /* Adjust this height to match your top navigation bar */
+        width: auto;
+        object-fit: contain;
+    }
+    .app-header .page-title {
+      margin-left: 24px;
+      font-size: 13px;
+      color: black;
+      font-weight: 400;
+    }
+
+    .app-header .htmx-spinner-wrap {
+      margin-left: auto;
+      display: none;
+      align-items: center;
+      gap: 6px;
+      color: rgba(255,255,255,0.6);
+      font-size: 11px;
+    }
+    .htmx-request .htmx-spinner-wrap { display: flex; }
+
+    /* ── Body row (sidebar + content) ───────────────────────── */
+    .app-body {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── Left nav sidebar ────────────────────────────────────── */
+    .left-nav {
+      width: 54px;
+      min-width: 54px;
+      background: var(--secondary-dark);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding-top: 10px;
+      position: relative;
+      z-index: 40;
+    }
+
+    .left-nav ul {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      width: 100%;
+    }
+
+    .left-nav ul li {
+      display: flex;
+      justify-content: center;
+      padding: 4px 0;
+    }
+
+    .left-nav ul li a,
+    .left-nav ul li span.nav-icon {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      border-radius: 6px;
+      color: rgba(255,255,255,0.55);
+      text-decoration: none;
+      font-size: 18px;
+      cursor: pointer;
+      transition: background 0.16s, color 0.16s;
+      position: relative;
+    }
+
+    .left-nav ul li a:hover,
+    .left-nav ul li span.nav-icon:hover {
+      background: var(--primary);
+      color: #fff;
+    }
+
+    .left-nav ul li a.active,
+    .left-nav ul li span.nav-icon.active {
+      background: var(--primary);
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(48,185,239,0.25);
+    }
+
+    /* Tooltip */
+    .left-nav ul li a[title]:hover::after,
+    .left-nav ul li span.nav-icon[title]:hover::after {
+      content: attr(title);
+      position: absolute;
+      left: calc(100% + 10px);
+      top: 50%;
+      transform: translateY(-50%);
+      background: #1a1f5a;
+      color: #fff;
+      font-size: 11px;
+      font-family: 'Roboto', sans-serif;
+      white-space: nowrap;
+      padding: 4px 10px;
+      border-radius: 4px;
+      pointer-events: none;
+      z-index: 100;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+
+
+    /* Lower nav — pinned to bottom */
+    .left-nav .lower-nav {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+    }
+
+    /* Datalyzer logo cell */
+    .left-nav .datalyzer-cell {
+      background: var(--secondary-darker);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 40px;
+    }
+
+    /* ── User account dropdown ───────────────────────────────────────────── */
+    .user-menu-wrap {
+      position: relative;
+    }
+
+    .user-menu-popup {
+      display: none;
+      position: absolute;
+      bottom: calc(100% + 8px);
+      left: 8px;
+      min-width: 192px;
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 8px 28px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.10);
+      overflow: hidden;
+      z-index: 500;
+      border: 1px solid rgba(0,0,0,0.07);
+    }
+
+    .user-menu-popup.open { display: block; }
+
+    /* Username row — non-clickable */
+    .user-menu-name {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 13px 14px 11px;
+      border-bottom: 1px solid #f1f5f9;
+    }
+    .user-menu-name .um-user-icon {
+      font-size: 20px;
+      color: var(--primary);
+      flex-shrink: 0;
+      pointer-events: none;
+      line-height: 1;
+    }
+    .user-menu-name .um-name-text {
+      font-size: 13px; font-weight: 600; color: #111827;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      max-width: 130px;
+    }
+
+    /* Action rows */
+    .user-menu-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 14px;
+      background: #fff;
+      transition: background 0.13s;
+    }
+    .user-menu-item:hover { background: #f8fafc; }
+    .user-menu-item .um-row-icon {
+      font-size: 17px;
+      color: #64748b;
+      flex-shrink: 0;
+      pointer-events: none;
+      line-height: 1;
+    }
+     .user-menu-item .un-row-icon {
+      font-size: 17px;
+      color: #2f6abd;
+      flex-shrink: 0;
+      pointer-events: none;
+      line-height: 1;
+    }
+    .user-menu-item .um-label {
+      font-size: 13px;
+      color: #1e293b;
+      text-decoration: none;
+      font-weight: 500;
+      flex: 1;
+    }
+    .user-menu-item .um-label:hover { text-decoration: underline; }
+    .user-menu-item.logout-row { border-top: 1px solid #f1f5f9; }
+    .user-menu-item.logout-row .um-row-icon { color: #94a3b8; }
+    .user-menu-item.logout-row .un-row-icon { color: #94a3b8; }
+    .user-menu-item.logout-row .um-label { color: #1e293b; }
+
+    /* ── Multi-path dl-icon overlay fix ────────────────────────────────── */
+    /* Paths 2-N must sit on top of path1, not inline-beside it             */
+    [class^="dl-"][class*="path"],
+    [class*=" dl-"][class*="path"] { display: inline; }
+
+    .um-row-icon[class^="dl-"],
+    .um-row-icon[class*=" dl-"],
+    .um-user-icon[class^="dl-"],
+    .um-user-icon[class*=" dl-"] {
+      position: relative;
+      display: inline-block;
+      width: 1em;
+    }
+    .um-row-icon .path2:before,
+    .um-row-icon .path3:before,
+    .um-row-icon .path4:before,
+    .um-row-icon .path5:before,
+    .um-user-icon .path2:before,
+    .um-user-icon .path3:before {
+      position: absolute;
+      left: 0;
+      margin-left: 0 !important;
+    }
+
+    /* ── Main content area ───────────────────────────────────── */
+    .app-content {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+
+    /* ── Kanban helpers ──────────────────────────────────────── */
+    .kanban-scroll::-webkit-scrollbar         { height: 5px; }
+    .kanban-scroll::-webkit-scrollbar-track   { background: #f1f5f9; }
+    .kanban-scroll::-webkit-scrollbar-thumb   { background: #cbd5e1; border-radius: 4px; }
+
+    .kanban-column { min-height: 120px; }
+
+    .sortable-ghost  { opacity: 0.35; background: #e0f2fe !important; border: 2px dashed #38bdf8 !important; }
+    .sortable-chosen { box-shadow: 0 8px 24px rgba(0,0,0,0.12); transform: rotate(1.5deg); }
+
+    /* ── Modal backdrop ──────────────────────────────────────── */
+    #modal-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(20,24,70,0.45);
+      z-index: 200;
+      backdrop-filter: blur(2px);
+    }
+    #modal-backdrop.open { display: flex; align-items: center; justify-content: center; }
+    #modal-box {
+      background: #fff;
+      border-radius: 16px;
+      width: 860px;
+      max-width: 96vw;
+      max-height: 88vh;
+      overflow: hidden;
+      box-shadow: 0 24px 60px rgba(0,0,0,0.22);
+    }
+/* 1. Ensure your icon font is properly loaded */
+@font-face {
+  font-family: 'YourIconFontName'; /* Replace with your actual font name */
+  src: url('fonts/YourIconFont.ttf') format('truetype'); /* Update path */
+}
+
+/* 2. Base styles for the parent container */
+.dl-logout {
+  font-family: 'YourIconFontName' !important; /* Must match the font-family above */
+  font-style: normal;
+  font-weight: normal;
+  font-variant: normal;
+  text-transform: none;
+  line-height: 1;
+
+  /* Better Font Rendering */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 3. The Path Layers (Notice the removed .dl-logout:before) */
+.dl-logout .path1:before {
+  content: "\ea1c";
+  color: rgb(0, 0, 0);
+}
+.dl-logout .path2:before {
+  content: "\eada";
+  margin-left: -0.890625em; /* Stacks the layer */
+  color: rgb(0, 154, 15);
+}
+.dl-logout .path3:before {
+  content: "\eadb";
+  margin-left: -0.890625em; /* Stacks the layer */
+  color: rgb(0, 154, 15);
+}
+.dl-logout .path4:before {
+  content: "\eadc";
+  margin-left: -0.890625em; /* Stacks the layer */
+  color: rgb(0, 154, 15);
+}
+  </style>
+
+  {% block head %}{% endblock %}
+</head>
+
+<body>
+<div class="app-shell">
+
+  <!-- ══ TOP HEADER ════════════════════════════════════════════════════════ -->
+  <header class="app-header">
+    <img src="{% static 'images/sailor.png' %}" alt="Sailor Logo" class="sailor-logo">
+    <span class="page-title">{% block page_title %}Lead Management{% endblock %}</span> 
+    <span class="version-number">0.0.0.17</span>
+
+    <!-- ── Pet stage ────────────────────────────────────────────────────── -->
+    <div id="pet-stage" style="
+      flex:1; position:relative; overflow:hidden; height:45px;
+      pointer-events:none; margin-left:8px; margin-right:8px;
+    "></div>
+
+    <div class="htmx-spinner-wrap">
+      <svg class="animate-spin" style="width:14px;height:14px" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+      </svg>
+      Loading…
+    </div>
+  </header>
+
+  <!-- ══ BODY ROW ══════════════════════════════════════════════════════════ -->
+  <div class="app-body">
+
+    <!-- ── LEFT NAV ──────────────────────────────────────────────────────── -->
+    <nav class="left-nav">
+      <ul>
+
+        <!-- LMS / Sailor — FIRST icon (this app) -->
+        <li>
+          <a href="/pipeline/"
+             title="Lead Management"
+             class="{% if '/pipeline/' in request.path and '/pipeline/dead/' not in request.path or '/leads/' in request.path and '/pipeline/dead/' not in request.path %}active{% endif %}">
+            <i class="dl-user_management"></i>
+          </a>
+        </li>
+
+        <!-- Import -->
+        <li>
+          <a href="/imports/"
+             title="Import Leads"
+             class="{% if '/imports/' in request.path %}active{% endif %}">
+            <i class="dl-import-fmea"></i>
+          </a>
+        </li>
+
+        <!-- Dead / Inactive leads -->
+        <li>
+          <a href="/pipeline/dead/"
+             title="Dead &amp; Inactive Leads"
+             class="{% if '/pipeline/dead/' in request.path %}active{% endif %}">
+            <i class="dl-maintenance"></i>
+          </a>
+        </li>
+
+        <!-- Dashboard -->
+        <li>
+          <a href="/dashboard/"
+             title="SailBoard"
+             class="{% if '/dashboard/' in request.path %}active{% endif %}">
+            <i class="dl-dashboard"></i>
+          </a>
+        </li>
+
+        <li>
+          <a href="/campaigns/"
+             title="Campaigns"
+             class="{% if '/campaigns/' in request.path %}active{% endif %}">
+            <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="flex-shrink:0">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+            </svg>
+          </a>
+        </li>
+
+      <!-- Lower: User account + Datalyzer logo -->
+      <ul class="lower-nav">
+
+        <!-- User icon → opens dropdown with name / admin / logout -->
+        <li class="user-menu-wrap">
+
+          <!-- Trigger button -->
+          <span class="nav-icon {% if '/login/' in request.path %}active{% endif %}"
+                title="Account"
+                id="userMenuTrigger"
+                onclick="toggleUserMenu(event)"
+                style="cursor:pointer">
+            <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0z"/>
+            </svg>
+          </span>
+
+          <!-- Popup card -->
+          <div class="user-menu-popup" id="userMenuPopup">
+
+            <!-- Logged-in username — non-clickable display row -->
+            <div class="user-menu-name">
+              <i class="dl-user_login um-user-icon"></i>
+              
+              <span style="margin-left: 20px;" class="um-name-text" title="{{ sailor_user.display_name }}">
+                {{ sailor_user.display_name|default:"User" }}
+              </span>
+            </div>
+
+            <!-- Admin — icon static, only the label text is the link -->
+            <div class="user-menu-item">
+              <i class="dl-settings um-row-icon"></i>
+              <a href="/admin/" class="um-label">Admin</a>
+            </div>
+
+            <div class="user-menu-item">
+              <i class="dl-phone um-row-icon"></i>
+              <a href="/call/setup/" class="um-label">Call Setup</a>
+            </div>
+
+            <!-- Logout — icon static, only the label text is the link -->
+
+            <div class="user-menu-item logout-row">
+<span class="dl-logout">
+  <span class="path1"></span>
+  <span class="path2"></span>
+  <span class="path3"></span>
+  <span class="path4"></span>
+</span>
+              <a href="/auth/logout/" class="um-label">Logout</a>
+            </div>
+
+          </div><!-- /user-menu-popup -->
+        </li>
+
+        <li class="datalyzer-cell">
+          <img src="{% static 'images/datalyzer-icon.svg' %}" style="width:28px;height:auto" alt="Datalyzer" />
+        </li>
+      </ul>
+    </nav>
+
+    <!-- ── MAIN CONTENT ───────────────────────────────────────────────────── -->
+    <main class="app-content">
+      {% block content %}{% endblock %}
+    </main>
+
+  </div><!-- /app-body -->
+
+</div><!-- /app-shell -->
+
+<!-- ── Global lead detail modal ────────────────────────────────────────── -->
+<div id="modal-backdrop" onclick="closeModal(event)">
+  <div id="modal-box">
+    <div id="modal-content">
+      <!-- populated by HTMX -->
+    </div>
+  </div>
+</div>
+
+<script>
+function openModal() {
+  document.getElementById('modal-backdrop').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeModal(e) {
+  if (e && e.target !== document.getElementById('modal-backdrop')) return;
+  document.getElementById('modal-backdrop').classList.remove('open');
+  document.body.style.overflow = '';
+  document.getElementById('modal-content').innerHTML = '';
+}
+function closeModalForced() {
+  document.getElementById('modal-backdrop').classList.remove('open');
+  document.body.style.overflow = '';
+  document.getElementById('modal-content').innerHTML = '';
+}
+
+// HTMX: after loading lead detail into #modal-content, open the modal
+document.addEventListener('htmx:afterSwap', function(e) {
+  if (e.detail.target.id === 'modal-content') {
+    openModal();
+  }
+});
+
+// Delete confirmation helpers (null-safe — delete-zone no longer used in new modal design)
+function showDeleteConfirm(leadId) {
+  const zone    = document.getElementById('delete-zone-' + leadId);
+  const confirm = document.getElementById('delete-confirm-' + leadId);
+  if (zone)    zone.classList.add('hidden');
+  if (confirm) confirm.classList.remove('hidden');
+}
+function hideDeleteConfirm(leadId) {
+  const zone    = document.getElementById('delete-zone-' + leadId);
+  const confirm = document.getElementById('delete-confirm-' + leadId);
+  if (zone)    zone.classList.remove('hidden');
+  if (confirm) confirm.classList.add('hidden');
+}
+
+// HTMX event: lead was deleted -> close modal and remove card if requested
+document.addEventListener('htmx:afterRequest', function(e) {
+  const trigger = e.detail && e.detail.elt;
+  if (trigger && trigger.matches('[data-close-modal-on-success]') && e.detail.successful) {
+    const deletedLeadId = trigger.getAttribute('data-delete-lead-id');
+    if (deletedLeadId) removeLeadCard(deletedLeadId);
+    closeModalForced();
+  }
+});
+
+function removeLeadCard(leadId) {
+  if (!leadId) return;
+  document.querySelectorAll(`[data-lead-id="${leadId}"]`).forEach(card => card.remove());
+  if (typeof refreshColumnCounts === 'function') refreshColumnCounts();
+}
+
+document.body.addEventListener('leadDeleted', function(e) {
+  const detail = e.detail || {};
+  const leadId = detail.value || detail.id || detail;
+  removeLeadCard(leadId);
+  closeModalForced();
+});
+
+function toggleUserMenu(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  const menu = document.getElementById('userMenuPopup');
+  if (menu) menu.classList.toggle('open');
+}
+
+function closeUserMenu() {
+  const menu = document.getElementById('userMenuPopup');
+  if (menu) menu.classList.remove('open');
+}
+
+document.addEventListener('click', function(event) {
+  const wrap = document.querySelector('.user-menu-wrap');
+  if (wrap && !wrap.contains(event.target)) closeUserMenu();
+});
+
+document.addEventListener('keydown', function(event) {
+  if (event.key === 'Escape') {
+    closeUserMenu();
+    closeModalForced();
+  }
+});
+
+// Fallback for lead modal buttons if HTMX is unavailable or blocked by CDN/network.
+document.addEventListener('click', async function(event) {
+  if (window.htmx) return;
+
+  const trigger = event.target.closest('[hx-get][hx-target="#modal-content"]');
+  if (!trigger) return;
+
+  event.preventDefault();
+  event.stopPropagation();
+
+  const target = document.querySelector(trigger.getAttribute('hx-target'));
+  if (!target) return;
+
+  try {
+    const response = await fetch(trigger.getAttribute('hx-get'), {
+      headers: { 'HX-Request': 'true' },
+      credentials: 'same-origin'
+    });
+    if (!response.ok) throw new Error('Request failed');
+    target.innerHTML = await response.text();
+    openModal();
+  } catch (error) {
+    console.error('Unable to load lead detail', error);
+  }
+});
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function() {
+    navigator.serviceWorker.register('/service-worker.js').catch(function(error) {
+      console.warn('Sailor service worker registration failed', error);
+    });
+  });
+}
+
+// ── Header pets ────────────────────────────────────────────────────────────
+(function () {
+  const ALL_PETS = [
+    '🐱','🐶','🐸','🦊','🐧','🐭','🐹','🐰','🐻','🦄',
+    '🐼','🐨','🦁','🐯','🦉'
+  ];
+
+  // Deterministic RNG seeded by the current hour (changes every hour)
+  function mkRand(seed) {
+    let s = (seed * 7919 + 42) | 0;
+    return function () {
+      s = Math.imul(s ^ (s >>> 16), 0x45d9f3b);
+      s = Math.imul(s ^ (s >>> 16), 0x45d9f3b);
+      s ^= s >>> 16;
+      return (s >>> 0) / 0xffffffff;
+    };
+  }
+
+  const rand    = mkRand(new Date().getHours());
+  // Shuffle pool and take first 10
+  const pool    = [...ALL_PETS].sort(() => rand() - 0.5).slice(0, 10);
+  const stage   = document.getElementById('pet-stage');
+  if (!stage) return;
+
+  const H        = 45;
+  const PET_SIZE = 22;
+  const TOP_MAX  = H - PET_SIZE - 2;
+
+  // Build pet DOM + state
+  const pets = pool.map(function (emoji) {
+    const span = document.createElement('span');
+    span.textContent = emoji;
+    span.style.cssText = [
+      'position:absolute',
+      'font-size:' + PET_SIZE + 'px',
+      'top:'  + Math.floor(rand() * TOP_MAX) + 'px',
+      'left:0',
+      'line-height:1',
+      'will-change:transform,left',
+    ].join(';');
+    stage.appendChild(span);
+
+    const speed = rand() * 0.9 + 0.25;   // 0.25 – 1.15 px per frame
+    return {
+      el    : span,
+      x     : rand() * 200,              // spread start positions
+      dx    : speed * (rand() > 0.5 ? 1 : -1),
+    };
+  });
+
+  function tick() {
+    const W = stage.offsetWidth;
+    if (W === 0) { requestAnimationFrame(tick); return; }
+
+    pets.forEach(function (p) {
+      p.x += p.dx;
+      if (p.x <= 0)          { p.x = 0;        p.dx =  Math.abs(p.dx); }
+      if (p.x >= W - PET_SIZE){ p.x = W - PET_SIZE; p.dx = -Math.abs(p.dx); }
+      p.el.style.left      = p.x + 'px';
+      p.el.style.transform = p.dx > 0 ? 'scaleX(1)' : 'scaleX(-1)';
+    });
+    requestAnimationFrame(tick);
+  }
+
+  requestAnimationFrame(tick);
+})();
+</script>
+
+{% block scripts %}{% endblock %}
+</body>
+</html>

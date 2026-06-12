@@ -1,0 +1,11 @@
+<!-- ── Kanban board ─────────────────────────────────────────────────────── -->
+<div id="view-kanban" class="hidden overflow-x-auto kanban-scroll pb-6 -mx-1 px-1">
+  <div id="board-columns" class="flex gap-3.5" style="min-width: max-content;">
+    {% include "pipeline/partials/board_columns.html" %}
+  </div>
+</div>
+
+<!-- ── List view ──────────────────────────────────────────────────────────── -->
+<div id="view-list" class="">
+  {% include "pipeline/partials/lead_list.html" %}
+</div>

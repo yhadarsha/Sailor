@@ -1,0 +1,93 @@
+{% comment %}
+Lead card — used in board columns and returned by the move_lead HTMX endpoint.
+Expects: lead (Lead instance with select_related company, source, assigned_to)
+{% endcomment %}
+
+<div class="lead-card group bg-white rounded-lg border border-slate-200
+            p-3 cursor-grab active:cursor-grabbing
+            shadow-sm hover:shadow-md hover:border-slate-300
+            transition-all duration-150"
+     data-lead-id="{{ lead.id }}">
+
+  <!-- Name -->
+  <p class="text-sm font-semibold text-slate-800 leading-snug truncate">
+    {{ lead.full_name }}
+  </p>
+
+  <!-- Company -->
+  {% if lead.company %}
+  <p class="text-xs text-slate-500 truncate mt-0.5">{{ lead.company.name }}</p>
+  {% else %}
+  <p class="text-xs text-slate-300 italic mt-0.5">No company</p>
+  {% endif %}
+
+  <!-- Tags: city + source -->
+  <div class="flex flex-wrap gap-1.5 mt-2">
+
+    {% if lead.city %}
+    <span class="inline-flex items-center gap-1 text-xs
+                 bg-slate-50 border border-slate-200 text-slate-500
+                 rounded-md px-1.5 py-0.5 leading-none">
+      <svg class="w-2.5 h-2.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M17.657 16.657L13.414 20.9a2 2 0 01-2.828 0l-4.243-4.243
+                 a8 8 0 1111.314 0zM15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+      </svg>
+      {{ lead.city }}
+    </span>
+    {% endif %}
+
+    {% if lead.source %}
+    <span class="inline-flex items-center text-xs
+                 bg-blue-50 border border-blue-100 text-blue-600
+                 rounded-md px-1.5 py-0.5 leading-none">
+      {{ lead.source.name }}
+    </span>
+    {% endif %}
+
+    {% if lead.email_bounced %}
+    <span class="inline-flex items-center text-xs
+                 bg-red-50 border border-red-100 text-red-500
+                 rounded-md px-1.5 py-0.5 leading-none">
+      Bounced
+    </span>
+    {% endif %}
+
+  </div>
+
+  <!-- Footer: assigned owner + view link -->
+  <div class="flex items-center justify-between mt-2.5 pt-2 border-t border-slate-100">
+
+    {% if lead.assigned_to %}
+    <div class="flex items-center gap-1.5 min-w-0">
+      <div class="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700
+                  text-xs font-bold flex items-center justify-center flex-shrink-0">
+        {{ lead.assigned_to.display_name|slice:":1"|upper }}
+      </div>
+      <span class="text-xs text-slate-500 truncate">
+        {{ lead.assigned_to.display_name }}
+      </span>
+    </div>
+    {% else %}
+    <span class="text-xs text-slate-300 italic">Unassigned</span>
+    {% endif %}
+
+    <!-- View lead → HTMX loads detail modal -->
+    <button hx-get="/leads/{{ lead.id }}/"
+            hx-target="#modal-content"
+            hx-swap="innerHTML"
+            title="View lead"
+            class="flex-shrink-0 ml-1 p-1.5 rounded-md cursor-pointer border-0
+                   text-slate-400 bg-slate-100 hover:bg-blue-100 hover:text-blue-600
+                   transition-colors duration-150">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7
+                 -1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+      </svg>
+    </button>
+
+  </div>
+</div>

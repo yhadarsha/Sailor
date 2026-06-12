@@ -1,0 +1,59 @@
+{% comment %}current_step: 1, 2, or 3{% endcomment %}
+<div class="flex items-center w-full max-w-sm">
+
+  <!-- Step 1 -->
+  <div class="flex items-center gap-2">
+    <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0
+                {% if current_step == 1 %}bg-blue-600 text-white
+                {% elif current_step > 1 %}bg-emerald-500 text-white
+                {% else %}bg-slate-200 text-slate-500{% endif %}">
+      {% if current_step > 1 %}
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+        </svg>
+      {% else %}1{% endif %}
+    </div>
+    <span class="text-xs font-medium {% if current_step == 1 %}text-blue-600{% elif current_step > 1 %}text-emerald-600{% else %}text-slate-400{% endif %}">
+      Upload
+    </span>
+  </div>
+
+  <!-- Connector -->
+  <div class="flex-1 h-px mx-3 {% if current_step > 1 %}bg-emerald-300{% else %}bg-slate-200{% endif %}"></div>
+
+  <!-- Step 2 -->
+  <div class="flex items-center gap-2">
+    <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0
+                {% if current_step == 2 %}bg-blue-600 text-white
+                {% elif current_step > 2 %}bg-emerald-500 text-white
+                {% else %}bg-slate-200 text-slate-500{% endif %}">
+      {% if current_step > 2 %}
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+        </svg>
+      {% else %}2{% endif %}
+    </div>
+    <span class="text-xs font-medium {% if current_step == 2 %}text-blue-600{% elif current_step > 2 %}text-emerald-600{% else %}text-slate-400{% endif %}">
+      Map Columns
+    </span>
+  </div>
+
+  <!-- Connector -->
+  <div class="flex-1 h-px mx-3 {% if current_step > 2 %}bg-emerald-300{% else %}bg-slate-200{% endif %}"></div>
+
+  <!-- Step 3 -->
+  <div class="flex items-center gap-2">
+    <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0
+                {% if current_step == 3 %}bg-emerald-500 text-white{% else %}bg-slate-200 text-slate-500{% endif %}">
+      {% if current_step == 3 %}
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+        </svg>
+      {% else %}3{% endif %}
+    </div>
+    <span class="text-xs font-medium {% if current_step == 3 %}text-emerald-600{% else %}text-slate-400{% endif %}">
+      Done
+    </span>
+  </div>
+
+</div>
