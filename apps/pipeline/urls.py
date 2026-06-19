@@ -17,6 +17,7 @@ urlpatterns = [
     path("leads/<uuid:lead_id>/mark-bounced/",   views.mark_bounced,   name="mark_bounced"),
     path("leads/<uuid:lead_id>/mark-converted/", views.mark_converted, name="mark_converted"),
     path("leads/bulk-move/",                     views.bulk_move_leads,     name="bulk_move_leads"),
+    path("leads/bulk-delete/",                   views.bulk_delete_leads,   name="bulk_delete_leads"),
     path("leads/<uuid:lead_id>/send-email/",     views.send_email,          name="send_email"),
     # Public — no auth required; action_id acts as secret token
     path("email-pixel/<uuid:action_id>/",        views.email_pixel,         name="email_pixel"),

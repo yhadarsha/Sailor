@@ -195,6 +195,39 @@ def bulk_move_leads(request):
 
 
 @require_http_methods(["POST"])
+def bulk_delete_leads(request):
+    """
+    POST /leads/bulk-delete/
+    Permanently (hard) deletes the selected leads and everything that
+    references them — AI scores/insights, pipeline stage history, action
+    logs, campaign enrollments/sends, lead-duplicate records — via the
+    ON DELETE CASCADE constraints on those foreign keys.
+
+    NOTE: this intentionally does a real .delete(), not the usual
+    soft-delete (deleted_at) pattern used elsewhere in this app. The
+    import dedup check in apps/imports/utils.py matches against
+    Lead.all_objects, which includes soft-deleted rows — so a soft
+    delete would NOT stop a re-import from flagging these as duplicates
+    again. A hard delete is required for "delete this bad batch so I can
+    re-import cleanly" to actually work.
+
+    Accepts: lead_ids[] (list of UUIDs)
+    Returns: JSON count of leads deleted for the JS toolbar to display feedback.
+    """
+    from django.http import JsonResponse
+    lead_ids = request.POST.getlist("lead_ids")
+
+    if not lead_ids:
+        return JsonResponse({"error": "lead_ids required"}, status=400)
+
+    qs = Lead.all_objects.filter(pk__in=lead_ids)
+    count = qs.count()
+    qs.delete()
+
+    return JsonResponse({"deleted": count})
+
+
+@require_http_methods(["POST"])
 def move_lead(request, lead_id):
     """
     HTMX endpoint: called when a card is dropped into a new column.
