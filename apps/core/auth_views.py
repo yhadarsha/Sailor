@@ -19,7 +19,8 @@ from django.conf import settings
 from django.shortcuts import redirect, render
 from django.utils import timezone
 
-from apps.users.models import AllowedLogin, User
+from apps.users.models import AllowedLogin, User, UserMailToken
+from apps.core.crypto import encrypt_str
 
 logger = logging.getLogger(__name__)
 
@@ -121,14 +122,39 @@ def get_access_token(request) -> str | None:
         account=accounts[0],
     )
 
-    # Persist refreshed cache back into session
+    # Persist refreshed cache back into session, and also into UserMailToken
+    # so the persistent copy used by the campaign-send worker stays current.
     if cache.has_state_changed:
         request.session["msal_token_cache"] = cache.serialize()
         request.session.modified = True
+        sailor_oid = (request.session.get("sailor_user") or {}).get("oid")
+        if sailor_oid:
+            user = User.objects.filter(pk=sailor_oid).first()
+            _persist_mail_token(user, cache)
 
     if result and "access_token" in result:
         return result["access_token"]
     return None
+
+
+def _persist_mail_token(user: "User | None", cache: msal.SerializableTokenCache) -> None:
+    """
+    Save the MSAL token cache into UserMailToken (encrypted), independent of
+    the web session, so the campaign-send Celery worker can refresh a Graph
+    access token even when the user isn't currently logged in (e.g. on leave).
+
+    Best-effort: a failure here must never block login.
+    """
+    if not user:
+        return
+    try:
+        serialized = cache.serialize()
+        UserMailToken.objects.update_or_create(
+            user=user,
+            defaults={"encrypted_cache": encrypt_str(serialized)},
+        )
+    except Exception as exc:
+        logger.warning("Failed to persist mail token for %s: %s", user.email, exc)
 
 
 # ── Views ─────────────────────────────────────────────────────────────────────
@@ -270,6 +296,11 @@ def auth_callback(request):
         "role":         user.role,   # "admin" | "sales" | "viewer"
     }
     request.session["msal_token_cache"] = cache.serialize()
+
+    # Persist a copy independent of the session — see UserMailToken docstring.
+    # This is what makes scheduled campaign sends survive the 8h session
+    # expiry / the user being on leave on the scheduled day.
+    _persist_mail_token(user, cache)
 
     next_url = request.session.pop("login_next", None) or settings.LOGIN_REDIRECT_URL
     logger.info("User logged in: %s (%s)", display_name, email)

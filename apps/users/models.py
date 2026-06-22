@@ -75,6 +75,47 @@ class UserDevice(TimeStampedModel):
         return f"{label} for {self.user.display_name}"
 
 
+class UserMailToken(TimeStampedModel):
+    """
+    Persistent Microsoft Graph token cache for a user, independent of any
+    web login session.
+
+    WHY THIS EXISTS: scheduled campaign sends are processed by a Celery
+    worker that runs whether or not the user is currently logged into the
+    app. Previously the worker read the MSAL token cache out of the user's
+    Django session, which expires after SESSION_COOKIE_AGE (8h) or on
+    browser close — so a campaign scheduled for a day the user is on leave
+    (and hasn't logged in) would fail every time. This table lets the
+    worker silently refresh a Graph access token using the cached refresh
+    token (~90-day rolling validity with offline_access) regardless of
+    session state.
+
+    encrypted_cache stores the serialized msal.SerializableTokenCache,
+    encrypted at rest via apps.core.crypto (Fernet, key derived from
+    SECRET_KEY). Populated/refreshed automatically on every login
+    (apps/core/auth_views.py) and re-saved by the worker whenever it
+    silently refreshes the access token (apps/campaigns/tasks.py).
+    """
+
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name="mail_token",
+    )
+    encrypted_cache = models.TextField(
+        blank=True,
+        help_text="Encrypted, serialized MSAL token cache. Never store this in plaintext.",
+    )
+
+    class Meta:
+        db_table = "user_mail_tokens"
+        verbose_name = "User mail token"
+        verbose_name_plural = "User mail tokens"
+
+    def __str__(self) -> str:
+        return f"Mail token for {self.user.display_name}"
+
+
 class AllowedLogin(TimeStampedModel):
     """
     Admin-managed SSO allow-list.

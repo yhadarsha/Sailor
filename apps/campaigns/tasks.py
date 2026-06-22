@@ -147,49 +147,114 @@ def process_due_campaign_sends(self):
     return {"sent": sent, "failed": failed, "skipped": skipped}
 
 
+def _acquire_silent(cache):
+    """Shared helper: build an MSAL client around a deserialized cache and
+    try a silent token refresh. Returns the MSAL result dict, or None."""
+    import msal
+    from django.conf import settings
+
+    cca = msal.ConfidentialClientApplication(
+        settings.AZURE_AD_CLIENT_ID,
+        authority=settings.AZURE_AD_AUTHORITY,
+        client_credential=settings.AZURE_AD_CLIENT_SECRET,
+        token_cache=cache,
+    )
+    accounts = cca.get_accounts()
+    if not accounts:
+        return None
+    return cca.acquire_token_silent(settings.AZURE_AD_SCOPES, account=accounts[0])
+
+
+def _get_token_from_persistent_store(user):
+    """
+    PRIMARY path: refresh a Graph access token from the UserMailToken table
+    (encrypted MSAL cache, independent of any web session). This is what
+    lets a scheduled send go out even if the user is on leave and hasn't
+    logged in — as long as their Microsoft refresh token (~90-day rolling
+    window with offline_access) is still valid.
+
+    Returns None if there's no persistent record yet (e.g. user hasn't
+    logged in since this feature shipped) — caller falls back to the
+    session-scan method in that case.
+    """
+    import msal
+    from apps.users.models import UserMailToken
+    from apps.core.crypto import decrypt_str, encrypt_str
+
+    token_row = UserMailToken.objects.filter(user=user).first()
+    if not token_row or not token_row.encrypted_cache:
+        return None
+
+    serialized = decrypt_str(token_row.encrypted_cache)
+    if not serialized:
+        return None
+
+    cache = msal.SerializableTokenCache()
+    cache.deserialize(serialized)
+
+    result = _acquire_silent(cache)
+
+    if cache.has_state_changed:
+        token_row.encrypted_cache = encrypt_str(cache.serialize())
+        token_row.save(update_fields=["encrypted_cache", "updated_at"])
+
+    if result and "access_token" in result:
+        return result["access_token"]
+    return None
+
+
+def _get_token_from_session(user):
+    """
+    FALLBACK path (pre-existing behaviour): scan active Django sessions for
+    one belonging to this user and refresh from its embedded MSAL cache.
+    Kept so users who logged in before the persistent-token feature shipped
+    keep working today, without needing to immediately re-login — but note
+    this still expires with the session (8h / browser close), so it's only
+    a bridge until everyone has logged in at least once post-rollout.
+    """
+    import msal
+    from django.contrib.sessions.backends.db import SessionStore
+    from django.contrib.sessions.models import Session
+    from django.utils import timezone as tz
+
+    active_sessions = Session.objects.filter(expire_date__gt=tz.now())
+    for session_obj in active_sessions:
+        data = session_obj.get_decoded()
+        sailor = data.get("sailor_user", {})
+        if sailor.get("email", "").lower() != user.email.lower():
+            continue
+        cache_data = data.get("msal_token_cache")
+        if not cache_data:
+            continue
+        cache = msal.SerializableTokenCache()
+        cache.deserialize(cache_data)
+
+        result = _acquire_silent(cache)
+        if result and "access_token" in result:
+            data["msal_token_cache"] = cache.serialize()
+            store = SessionStore(session_key=session_obj.session_key)
+            store.update(data)
+            store.save()
+            return result["access_token"]
+    return None
+
+
 def _get_token_for_user(user):
-    """Retrieve a valid Graph access token for the given user from their stored MSAL cache."""
+    """
+    Retrieve a valid Graph access token for the given user.
+
+    Tries the persistent UserMailToken store first (works regardless of
+    login state — see that model's docstring for why this exists), and
+    falls back to scanning active web sessions for users who haven't
+    logged in since this feature shipped.
+    """
     if not user:
         return None
     try:
-        import msal
-        from django.conf import settings
-        from django.contrib.sessions.backends.db import SessionStore
-        from django.contrib.sessions.models import Session
-        from django.utils import timezone as tz
-
-        # Find the active session for this user
-        active_sessions = Session.objects.filter(expire_date__gt=tz.now())
-        for session_obj in active_sessions:
-            data = session_obj.get_decoded()
-            sailor = data.get("sailor_user", {})
-            if sailor.get("email", "").lower() == user.email.lower():
-                cache_data = data.get("msal_token_cache")
-                if not cache_data:
-                    continue
-                cache = msal.SerializableTokenCache()
-                cache.deserialize(cache_data)
-                authority = settings.AZURE_AD_AUTHORITY
-                cca = msal.ConfidentialClientApplication(
-                    settings.AZURE_AD_CLIENT_ID,
-                    authority=authority,
-                    client_credential=settings.AZURE_AD_CLIENT_SECRET,
-                    token_cache=cache,
-                )
-                accounts = cca.get_accounts()
-                if not accounts:
-                    continue
-                result = cca.acquire_token_silent(settings.AZURE_AD_SCOPES, account=accounts[0])
-                if result and "access_token" in result:
-                    # Update session cache
-                    session_obj.get_decoded()  # ensure loaded
-                    raw = session_obj.session_data
-                    # Re-serialize updated cache back to session
-                    data["msal_token_cache"] = cache.serialize()
-                    store = SessionStore(session_key=session_obj.session_key)
-                    store.update(data)
-                    store.save()
-                    return result["access_token"]
+        token = _get_token_from_persistent_store(user)
+        if token:
+            return token
+        return _get_token_from_session(user)
     except Exception as exc:
         logger.warning("_get_token_for_user failed: %s", exc)
     return None
