@@ -4,3 +4,5 @@ __pycache__/
 lmsenv/
 staticfiles/
 media/
+Claude outputs/
+.md
