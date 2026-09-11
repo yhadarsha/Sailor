@@ -69,12 +69,14 @@ class Campaign(models.Model):
         sends    = CampaignSend.objects.filter(campaign_lead__campaign=self)
         sent     = sends.filter(status__in=["sent", "opened", "replied"]).count()
         opens    = sends.filter(status__in=["opened", "replied"]).count()
+        failed   = sends.filter(status=CampaignSend.STATUS_FAILED).count()
         replied  = self.leads.filter(status=CampaignLead.STATUS_REPLIED).count()
         enrolled = self.leads.count()
         return {
             "enrolled":   enrolled,
             "sent":       sent,
             "opens":      opens,
+            "failed":     failed,
             "replied":    replied,
             "open_rate":  round(opens / sent * 100, 1) if sent else 0,
             "reply_rate": round(replied / enrolled * 100, 1) if enrolled else 0,
@@ -158,21 +160,27 @@ class CampaignLead(models.Model):
 
 
 class CampaignSend(models.Model):
-    STATUS_QUEUED  = "queued"
-    STATUS_SENT    = "sent"
-    STATUS_OPENED  = "opened"
-    STATUS_REPLIED = "replied"
-    STATUS_FAILED  = "failed"
-    STATUS_SKIPPED = "skipped"
-    STATUS_BOUNCED = "bounced"
+    STATUS_QUEUED    = "queued"
+    STATUS_SCHEDULED = "scheduled"
+    STATUS_SENT      = "sent"
+    STATUS_OPENED    = "opened"
+    STATUS_REPLIED   = "replied"
+    STATUS_FAILED    = "failed"
+    STATUS_SKIPPED   = "skipped"
+    STATUS_BOUNCED   = "bounced"
     STATUS_CHOICES = [
-        (STATUS_QUEUED,  "Queued"),
-        (STATUS_SENT,    "Sent"),
-        (STATUS_OPENED,  "Opened"),
-        (STATUS_REPLIED, "Replied"),
-        (STATUS_FAILED,  "Failed"),
-        (STATUS_SKIPPED, "Skipped"),
-        (STATUS_BOUNCED, "Bounced"),
+        (STATUS_QUEUED,    "Queued"),
+        # Claimed by the dispatcher and handed to an individual Celery task
+        # with a countdown, but not yet attempted. Distinct from QUEUED so
+        # the dispatcher never claims the same row twice across its 5-minute
+        # cycles while the row is "in flight" waiting for its countdown.
+        (STATUS_SCHEDULED, "Scheduled"),
+        (STATUS_SENT,      "Sent"),
+        (STATUS_OPENED,    "Opened"),
+        (STATUS_REPLIED,   "Replied"),
+        (STATUS_FAILED,    "Failed"),
+        (STATUS_SKIPPED,   "Skipped"),
+        (STATUS_BOUNCED,   "Bounced"),
     ]
 
     id            = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -183,6 +191,12 @@ class CampaignSend(models.Model):
         max_length=20, choices=STATUS_CHOICES, default=STATUS_QUEUED, db_index=True
     )
     scheduled_for = models.DateTimeField(db_index=True)
+    attempted_at  = models.DateTimeField(
+        null=True, blank=True,
+        help_text="When a send was actually attempted (success or failure) — "
+                   "distinct from scheduled_for/created_at, used to evaluate "
+                   "consecutive-failure streaks in send order.",
+    )
     sent_at       = models.DateTimeField(null=True, blank=True)
     opened_at     = models.DateTimeField(null=True, blank=True)
     replied_at    = models.DateTimeField(null=True, blank=True)

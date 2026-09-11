@@ -3,7 +3,6 @@ Campaigns views — rebuilt for Sailor v2.
 """
 
 import random
-import time
 import re
 from datetime import timedelta
 from django.db.models import Exists, OuterRef
@@ -19,7 +18,11 @@ from apps.leads.models import Lead
 from apps.pipeline.models import PipelineStage, LeadStageHistory
 from apps.users.models import User
 from apps.actions.models import Action, ActionType
-from apps.core.graph_email import send_graph_email, GraphEmailError
+# Note: send_graph_email/GraphEmailError are no longer called directly from
+# this module — all sends (automatic and manual "Send Now") now go through
+# apps.campaigns.tasks.dispatch_campaign_sends, which is the only place that
+# calls Microsoft Graph. Sending in a request-blocking loop here is exactly
+# the pattern that caused the original mailbox block.
 
 
 def _campaign_activities(campaign, limit=50):
@@ -109,9 +112,9 @@ def campaign_list(request):
                 filter=Q(leads__sends__status__in=["opened", "replied"]),
                 distinct=True,
             ),
-            replied_count=Count(
-                "leads",
-                filter=Q(leads__status="replied"),
+            failed_count=Count(
+                "leads__sends",
+                filter=Q(leads__sends__status="failed"),
                 distinct=True,
             ),
         )
@@ -199,6 +202,7 @@ def campaign_detail(request, campaign_id):
     all_sends     = CampaignSend.objects.filter(campaign_lead__campaign=campaign)
     total_sent    = all_sends.filter(status__in=["sent", "opened", "replied"]).count()
     total_opens   = all_sends.filter(status__in=["opened", "replied"]).count()
+    total_failed  = all_sends.filter(status=CampaignSend.STATUS_FAILED).count()
     total_replied = campaign.leads.filter(status=CampaignLead.STATUS_REPLIED).count()
     total_enrolled = campaign.leads.count()
 
@@ -245,6 +249,7 @@ def campaign_detail(request, campaign_id):
         "step_analytics":    step_analytics,
         "total_sent":        total_sent,
         "total_opens":       total_opens,
+        "total_failed":      total_failed,
         "total_replied":     total_replied,
         "total_enrolled":    total_enrolled,
         "open_rate":         round(total_opens / total_sent * 100, 1) if total_sent else 0,
@@ -351,68 +356,21 @@ def campaign_add_step(request, campaign_id):
                 # Always reset back to active — they have a new pending send
                 CampaignLead.objects.filter(pk=cl.pk).update(status=CampaignLead.STATUS_ACTIVE)
 
-            # If "Save & Send Now" clicked — immediately send
+            # If "Save & Send Now" clicked — hand the due sends for this step
+            # off to the same protected dispatch path the automatic sender
+            # uses (jitter, daily cap/warm-up, circuit breaker), instead of
+            # sending directly in this request with a bare sleep loop. The
+            # actual Graph calls happen asynchronously in Celery; this view
+            # just returns once they're scheduled.
             if send_now_flag and step_type == CampaignStep.TYPE_EMAIL:
-                token = _get_token(request)
-                if token:
-                    sender_name = _sailor_user(request).get("display_name", "The Team")
-                    email_type  = ActionType.objects.filter(category="email").first()
-                    db_user     = _db_user(request)
-                    sent = failed = 0
-                    due_sends = CampaignSend.objects.filter(
-                        campaign_lead__campaign=campaign,
-                        step=step,
-                        status=CampaignSend.STATUS_QUEUED,
-                        scheduled_for__lte=now,
-                    ).select_related("campaign_lead__lead__company")
-                    for cs in due_sends:
-                        lead = cs.campaign_lead.lead
-                        if not lead.email:
-                            CampaignSend.objects.filter(pk=cs.pk).update(
-                                status=CampaignSend.STATUS_SKIPPED, error_message="No email"
-                            )
-                            continue
-                        pixel_url = request.build_absolute_uri(f"/campaigns/pixel/{cs.pk}/")
-                        subj = _render_template(step.subject_template, lead, sender_name)
-                        body_rendered = _render_template(step.body_html_template, lead, sender_name, pixel_url)
-                        action = None
-                        if email_type:
-                            action = Action.objects.create(
-                                lead=lead, action_type=email_type,
-                                performed_by=db_user, performed_at=now,
-                                metadata={
-                                    "note": f"[Campaign: {campaign.name}] {subj}",
-                                    "email_subject": subj, "email_body": body_rendered,
-                                    "email_to": lead.email, "email_status": "sent",
-                                    "campaign_id": str(campaign.pk), "campaign_name": campaign.name,
-                                    "campaign_step": step.step_number,
-                                    "has_attachment": bool(attachments_data),
-                                },
-                            )
-                        step_attachments = [
-                            {"@odata.type": "#microsoft.graph.fileAttachment",
-                             "name": a["name"], "contentType": a["content_type"],
-                             "contentBytes": a["data_b64"]}
-                            for a in attachments_data
-                        ]
-                        try:
-                            send_graph_email(access_token=token, to_email=lead.email,
-                                             subject=subj, body_html=body_rendered,
-                                             attachments=step_attachments or None)
-                            CampaignSend.objects.filter(pk=cs.pk).update(
-                                status=CampaignSend.STATUS_SENT, sent_at=now,
-                                action_id=action.pk if action else None,
-                            )
-                            CampaignLead.objects.filter(pk=cs.campaign_lead_id).update(
-                                current_step=step.step_number
-                            )
-                            sent += 1
-                        except GraphEmailError as exc:
-                            CampaignSend.objects.filter(pk=cs.pk).update(
-                                status=CampaignSend.STATUS_FAILED, error_message=str(exc)
-                            )
-                            failed += 1
-                        time.sleep(2)
+                from apps.campaigns.tasks import dispatch_campaign_sends
+                due_qs = CampaignSend.objects.filter(
+                    campaign_lead__campaign=campaign,
+                    step=step,
+                    status=CampaignSend.STATUS_QUEUED,
+                    scheduled_for__lte=now,
+                ).select_related("campaign_lead__campaign__created_by", "campaign_lead__lead")
+                dispatch_campaign_sends(due_qs)
 
             return redirect("campaigns:campaign_detail", campaign_id=campaign_id)
 
@@ -444,6 +402,116 @@ def _render_steps_partial(request, campaign):
         "campaign":    campaign,
         "step_groups": _steps_grouped(campaign),
     })
+
+
+def _sync_queued_sends_schedule(step, new_scheduled_at):
+    """When a scheduled step's time changes, push that new time onto every
+    send for this step that hasn't gone out yet (still queued)."""
+    now = timezone.now()
+    CampaignSend.objects.filter(step=step, status=CampaignSend.STATUS_QUEUED).update(
+        scheduled_for=new_scheduled_at if new_scheduled_at else now
+    )
+
+
+def _parse_scheduled_at(raw: str):
+    raw = (raw or "").strip()
+    if not raw:
+        return None
+    from django.utils.dateparse import parse_datetime
+    dt = parse_datetime(raw + ":00") or parse_datetime(raw)
+    if dt and timezone.is_naive(dt):
+        dt = timezone.make_aware(dt)
+    return dt
+
+
+@require_POST
+def campaign_reschedule_step(request, campaign_id, step_id):
+    """Change a scheduled step's send time, and push the new time onto any
+    sends for that step that haven't gone out yet."""
+    campaign = get_object_or_404(Campaign, pk=campaign_id)
+    step     = get_object_or_404(CampaignStep, pk=step_id, campaign=campaign)
+
+    scheduled_at = _parse_scheduled_at(request.POST.get("scheduled_at", ""))
+    step.scheduled_at = scheduled_at
+    step.save(update_fields=["scheduled_at"])
+    _sync_queued_sends_schedule(step, scheduled_at)
+
+    if request.headers.get("HX-Request"):
+        return _render_steps_partial(request, campaign)
+    return redirect("campaigns:campaign_detail", campaign_id=campaign_id)
+
+
+@require_http_methods(["GET", "POST"])
+def campaign_edit_step(request, campaign_id, step_id):
+    """Modify a step's content (and schedule). GET returns the edit-form
+    partial for inline display; POST saves the changes."""
+    campaign = get_object_or_404(Campaign, pk=campaign_id)
+    step     = get_object_or_404(CampaignStep, pk=step_id, campaign=campaign)
+
+    if request.method == "POST":
+        label            = request.POST.get("label", "").strip()
+        scheduled_at_str = request.POST.get("scheduled_at", "")
+        subject_template = request.POST.get("subject_template", "").strip()
+        body_html        = request.POST.get("body_html_template", "").strip()
+        task_description = request.POST.get("task_description", "").strip()
+
+        scheduled_at = _parse_scheduled_at(scheduled_at_str)
+
+        step.label = label
+        step.scheduled_at = scheduled_at
+        if step.step_type == CampaignStep.TYPE_EMAIL:
+            step.subject_template = subject_template
+            step.body_html_template = body_html
+        else:
+            step.task_description = task_description
+        step.save(update_fields=[
+            "label", "scheduled_at", "subject_template",
+            "body_html_template", "task_description",
+        ])
+        _sync_queued_sends_schedule(step, scheduled_at)
+
+        if request.headers.get("HX-Request"):
+            return _render_steps_partial(request, campaign)
+        return redirect("campaigns:campaign_detail", campaign_id=campaign_id)
+
+    return render(request, "campaigns/partials/step_edit_form.html", {
+        "campaign": campaign, "step": step,
+    })
+
+
+@require_POST
+def campaign_step_send_now(request, campaign_id, step_id):
+    """Immediately send every still-queued send for one specific step,
+    regardless of its scheduled time. Only meaningful for email steps —
+    LinkedIn/Task steps fall back to the existing 'mark as done' flow."""
+    campaign = get_object_or_404(Campaign, pk=campaign_id)
+    step     = get_object_or_404(CampaignStep, pk=step_id, campaign=campaign)
+
+    if step.step_type != CampaignStep.TYPE_EMAIL:
+        return campaign_mark_step_done(request, campaign_id, step_id)
+
+    # Hand the due sends for this step off to the same protected dispatch
+    # path the automatic sender uses (jitter, daily cap/warm-up, circuit
+    # breaker) instead of sending directly in this request with a bare
+    # sleep loop. The actual Graph calls happen asynchronously in Celery.
+    from apps.campaigns.tasks import dispatch_campaign_sends
+    due_qs = (
+        CampaignSend.objects
+        .filter(
+            campaign_lead__campaign=campaign,
+            campaign_lead__status__in=[CampaignLead.STATUS_ACTIVE, CampaignLead.STATUS_COMPLETED],
+            step=step,
+            status=CampaignSend.STATUS_QUEUED,
+        )
+        .select_related("campaign_lead__campaign__created_by", "campaign_lead__lead")
+    )
+    dispatch_campaign_sends(due_qs, batch_size=BATCH_SIZE)
+
+    if request.headers.get("HX-Request"):
+        response = HttpResponse()
+        response["HX-Refresh"] = "true"
+        return response
+    return redirect("campaigns:campaign_detail", campaign_id=campaign_id)
 
 
 # ── Enroll ────────────────────────────────────────────────────────────────────
@@ -500,21 +568,18 @@ def campaign_enroll(request, campaign_id):
 
 @require_POST
 def campaign_send_now(request, campaign_id):
+    # Hand the due sends for this campaign off to the same protected
+    # dispatch path the automatic sender uses (jitter, daily cap/warm-up,
+    # circuit breaker) instead of sending directly in this request with a
+    # bare sleep loop. The actual Graph calls happen asynchronously in
+    # Celery; advance_next_step=True preserves this button's pre-existing
+    # behaviour of also queueing the next sequence step on a successful send.
+    from apps.campaigns.tasks import dispatch_campaign_sends
+
     campaign = get_object_or_404(Campaign, pk=campaign_id)
-    token    = _get_token(request)
-    if not token:
-        msg = "Session token expired — please re-login."
-        if request.headers.get("HX-Request"):
-            return HttpResponse(f'<p class="text-amber-700 text-xs p-2 bg-amber-50 rounded-lg">{msg}</p>')
-        return redirect("campaigns:campaign_detail", campaign_id=campaign_id)
+    now      = timezone.now()
 
-    sailor      = _sailor_user(request)
-    sender_name = sailor.get("display_name", "The Team")
-    now         = timezone.now()
-    email_type  = ActionType.objects.filter(category="email").first()
-    db_user     = _db_user(request)
-
-    due_sends = (
+    due_qs = (
         CampaignSend.objects
         .filter(
             campaign_lead__campaign=campaign,
@@ -522,101 +587,11 @@ def campaign_send_now(request, campaign_id):
             status=CampaignSend.STATUS_QUEUED,
             scheduled_for__lte=now,
         )
-        .select_related("campaign_lead__lead__company", "step")
-        .order_by("scheduled_for")[:BATCH_SIZE]
+        .select_related("campaign_lead__campaign__created_by", "campaign_lead__lead", "step")
     )
-
-    sent_count = failed_count = skipped_count = 0
-
-    for cs in due_sends:
-        lead = cs.campaign_lead.lead
-        if not lead.email:
-            CampaignSend.objects.filter(pk=cs.pk).update(
-                status=CampaignSend.STATUS_SKIPPED, error_message="No email address"
-            )
-            skipped_count += 1
-            continue
-
-        pixel_url = request.build_absolute_uri(f"/campaigns/pixel/{cs.pk}/")
-        subject   = _render_template(cs.step.subject_template, lead, sender_name)
-        body      = _render_template(cs.step.body_html_template, lead, sender_name, pixel_url)
-
-        action = None
-        if email_type:
-            action = Action.objects.create(
-                lead=lead,
-                action_type=email_type,
-                performed_by=db_user,
-                performed_at=now,
-                metadata={
-                    "note":           f"[Campaign: {campaign.name}] {subject}",
-                    "email_subject":  subject,
-                    "email_body":     body,
-                    "email_to":       lead.email,
-                    "email_status":   "sent",
-                    "campaign_id":    str(campaign.pk),
-                    "campaign_name":  campaign.name,
-                    "campaign_step":  cs.step.step_number,
-                    "has_attachment": bool(cs.step.attachments_json and cs.step.attachments_json != "[]"),
-                },
-            )
-
-        import json as _json
-        step_atts = _json.loads(cs.step.attachments_json or "[]")
-        graph_atts = [
-            {"@odata.type": "#microsoft.graph.fileAttachment",
-             "name": a["name"], "contentType": a["content_type"], "contentBytes": a["data_b64"]}
-            for a in step_atts
-        ]
-        try:
-            send_graph_email(
-                access_token=token,
-                to_email=lead.email,
-                subject=subject,
-                body_html=body,
-                attachments=graph_atts or None,
-            )
-            CampaignSend.objects.filter(pk=cs.pk).update(
-                status=CampaignSend.STATUS_SENT,
-                sent_at=now,
-                action_id=action.pk if action else None,
-            )
-            CampaignLead.objects.filter(pk=cs.campaign_lead_id).update(
-                current_step=cs.step.step_number
-            )
-            # Queue the next step for this lead if it hasn't been queued yet
-            next_step_number = cs.step.step_number + 1
-            next_steps = list(campaign.steps.filter(step_number=next_step_number))
-            if next_steps:
-                next_step = random.choice(next_steps)
-                cl = cs.campaign_lead
-                if not CampaignSend.objects.filter(
-                    campaign_lead=cl, step__step_number=next_step_number
-                ).exists():
-                    next_scheduled = next_step.scheduled_at if next_step.scheduled_at else now
-                    CampaignSend.objects.create(
-                        campaign_lead=cl,
-                        step=next_step,
-                        variant_label=next_step.variant_label,
-                        scheduled_for=next_scheduled,
-                    )
-            sent_count += 1
-        except GraphEmailError as exc:
-            CampaignSend.objects.filter(pk=cs.pk).update(
-                status=CampaignSend.STATUS_FAILED, error_message=str(exc)
-            )
-            if action:
-                meta = dict(action.metadata)
-                meta["email_status"] = "failed"
-                meta["error"] = str(exc)
-                Action.objects.filter(pk=action.pk).update(metadata=meta)
-            failed_count += 1
-
-        time.sleep(2)
-
-    for cl in campaign.leads.filter(status=CampaignLead.STATUS_ACTIVE):
-        if not cl.sends.filter(status=CampaignSend.STATUS_QUEUED).exists():
-            CampaignLead.objects.filter(pk=cl.pk).update(status=CampaignLead.STATUS_COMPLETED)
+    scheduled_count, skipped_count = dispatch_campaign_sends(
+        due_qs, batch_size=BATCH_SIZE, advance_next_step=True
+    )
 
     remaining = CampaignSend.objects.filter(
         campaign_lead__campaign=campaign,
@@ -626,12 +601,11 @@ def campaign_send_now(request, campaign_id):
     ).count()
 
     parts = []
-    if sent_count:    parts.append(f"✓ {sent_count} sent")
-    if failed_count:  parts.append(f"✗ {failed_count} failed")
-    if skipped_count: parts.append(f"— {skipped_count} skipped")
-    if not parts:     parts = ["No emails due right now"]
-    if remaining:     parts.append(f"· {remaining} still due")
-    colour = "emerald" if sent_count and not failed_count else ("red" if failed_count else "slate")
+    if scheduled_count: parts.append(f"✓ {scheduled_count} scheduled to send")
+    if skipped_count:   parts.append(f"— {skipped_count} skipped (daily cap or no email)")
+    if not parts:       parts = ["No emails due right now"]
+    if remaining:       parts.append(f"· {remaining} still due")
+    colour = "emerald" if scheduled_count else "slate"
     msg = " &nbsp;·&nbsp; ".join(parts)
 
     if request.headers.get("HX-Request"):

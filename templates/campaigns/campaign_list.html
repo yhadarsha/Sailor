@@ -36,7 +36,7 @@
   {% if campaigns %}
   <div class="space-y-3">
     {% for c in campaigns %}
-    {% with sent=c.sent_count opens=c.open_count enrolled=c.enrolled_count replied=c.replied_count %}
+    {% with sent=c.sent_count opens=c.open_count enrolled=c.enrolled_count failed=c.failed_count %}
     <a href="/campaigns/{{ c.id }}/"
        class="block bg-white border border-slate-200 rounded-xl px-5 py-4
               hover:border-blue-200 hover:shadow-sm transition-all">
@@ -74,10 +74,10 @@
             <p class="text-[10px] text-slate-400">Opened</p>
           </div>
           <div>
-            <p class="text-sm font-bold {% if replied > 0 %}text-sky-600{% else %}text-slate-700{% endif %}">
-              {% if enrolled %}{{ replied }}{% else %}—{% endif %}
+            <p class="text-sm font-bold {% if failed > 0 %}text-red-600{% else %}text-slate-700{% endif %}">
+              {% if sent %}{{ failed }}{% else %}—{% endif %}
             </p>
-            <p class="text-[10px] text-slate-400">Replied</p>
+            <p class="text-[10px] text-slate-400">Failed</p>
           </div>
           {% if c.created_by %}
           <div class="text-center">

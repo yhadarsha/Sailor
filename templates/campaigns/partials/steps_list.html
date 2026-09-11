@@ -104,6 +104,46 @@
               </form>
               <div class="border-t border-slate-100"></div>
               {% endif %}
+              {% if step.scheduled_at %}
+              <button type="button"
+                      onclick="toggleStepMenu('{{ step.id }}'); toggleReschedulePanel('{{ step.id }}')"
+                      class="w-full flex items-center gap-2 px-3 py-2.5 text-xs text-slate-600
+                             hover:bg-slate-50 transition-colors text-left">
+                <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                </svg>
+                Reschedule
+              </button>
+              <form method="POST"
+                    action="/campaigns/{{ campaign.id }}/steps/{{ step.id }}/send-now/"
+                    onsubmit="return confirm('Send step {{ step.step_number }} now to all leads currently queued for it?')">
+                {% csrf_token %}
+                <button type="submit"
+                        onclick="toggleStepMenu('{{ step.id }}')"
+                        class="w-full flex items-center gap-2 px-3 py-2.5 text-xs text-blue-600
+                               hover:bg-blue-50 transition-colors text-left">
+                  <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+                  </svg>
+                  Send Now
+                </button>
+              </form>
+              <button type="button"
+                      hx-get="/campaigns/{{ campaign.id }}/steps/{{ step.id }}/edit/"
+                      hx-target="#step-edit-target-{{ step.id }}"
+                      hx-swap="innerHTML"
+                      onclick="toggleStepMenu('{{ step.id }}'); document.getElementById('step-edit-target-{{ step.id }}').classList.remove('hidden')"
+                      class="w-full flex items-center gap-2 px-3 py-2.5 text-xs text-indigo-600
+                             hover:bg-indigo-50 transition-colors text-left">
+                <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                </svg>
+                Modify
+              </button>
+              <div class="border-t border-slate-100"></div>
+              {% endif %}
               <form method="POST"
                     action="/campaigns/{{ campaign.id }}/steps/{{ step.id }}/delete/"
                     onsubmit="return confirm('Delete step {{ step.step_number }}?')">
@@ -121,6 +161,28 @@
             </div>
           </div>
         </div>
+        {% if step.scheduled_at %}
+        <div id="step-reschedule-panel-{{ step.id }}" class="hidden mt-2 bg-blue-50 border border-blue-100 rounded-lg p-3">
+          <form method="POST" action="/campaigns/{{ campaign.id }}/steps/{{ step.id }}/reschedule/"
+                class="flex items-center gap-2 flex-wrap">
+            {% csrf_token %}
+            <input type="datetime-local" name="scheduled_at"
+                   value="{{ step.scheduled_at|date:'Y-m-d\TH:i' }}"
+                   class="text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white
+                          focus:outline-none focus:ring-2 focus:ring-blue-400">
+            <button type="submit"
+                    class="text-xs font-semibold px-3 py-1.5 rounded-lg text-white transition-colors"
+                    style="background:#30B9EF">
+              Save
+            </button>
+            <button type="button" onclick="toggleReschedulePanel('{{ step.id }}')"
+                    class="text-xs text-slate-400 hover:text-slate-600">
+              Cancel
+            </button>
+          </form>
+        </div>
+        <div id="step-edit-target-{{ step.id }}" class="hidden"></div>
+        {% endif %}
       </div>
     </div>
   </div>

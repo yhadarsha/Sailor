@@ -30,6 +30,7 @@
       {% include "campaigns/partials/stat_card.html" with label="Sent" value=total_sent color="slate" %}
       {% include "campaigns/partials/stat_card.html" with label="Opened" value=total_opens color="emerald" %}
       {% include "campaigns/partials/stat_card.html" with label="Open Rate" value=open_rate suffix="%" color="emerald" %}
+      {% include "campaigns/partials/stat_card.html" with label="Failed" value=total_failed color="red" %}
     </div>
   </div>
 
@@ -177,108 +178,143 @@
         </form>
       </div>
 
-      <div class="flex items-center justify-between mb-3">
-        <h2 class="text-xs font-bold text-slate-500 uppercase tracking-wide">
-          Enrolled Leads <span class="text-slate-400 font-normal">({{ total_enrolled }})</span>
-        </h2>
-        <button onclick="document.getElementById('add-leads-panel').classList.toggle('hidden')"
-                class="inline-flex items-center gap-1 text-xs font-semibold text-blue-600
-                       hover:text-blue-700 transition-colors">
-          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+      <!-- Enrolled Leads trigger (opens popup) -->
+      <div class="bg-white border border-slate-200 rounded-xl p-4 flex items-center justify-between gap-3">
+        <div>
+          <h2 class="text-xs font-bold text-slate-500 uppercase tracking-wide">
+            Enrolled Leads <span class="text-slate-400 font-normal">({{ total_enrolled }})</span>
+          </h2>
+          <p class="text-[11px] text-slate-400 mt-1">View enrolled leads, add new leads, or remove leads from this campaign.</p>
+        </div>
+        <button type="button" onclick="openEnrolledModal()"
+                class="inline-flex items-center gap-1.5 text-xs font-semibold text-white
+                       px-3 py-1.5 rounded-lg transition-colors flex-shrink-0" style="background:#30B9EF">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M9 20H4v-2a4 4 0 014-4h1m4-5a3 3 0 11-6 0 3 3 0 016 0zm6 9v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
           </svg>
-          Add Leads
+          View Leads
         </button>
-      </div>
-
-      <!-- Add leads panel (hidden) -->
-      <div id="add-leads-panel" class="hidden mb-4 bg-white border border-slate-200 rounded-xl p-4">
-        <div id="enroll-result" class="mb-2"></div>
-        <form hx-post="/campaigns/{{ campaign.id }}/enroll/"
-              hx-target="#enroll-result"
-              hx-swap="innerHTML">
-          {% csrf_token %}
-
-          <!-- Search input -->
-          <div class="relative mb-2">
-            <svg class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none"
-                 fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
-            </svg>
-            <input type="text" id="lead-search" placeholder="Search name, company or email…"
-                   autocomplete="off" oninput="filterLeads()"
-                   class="w-full text-xs pl-7 pr-3 py-1.5 border border-slate-200 rounded-lg
-                          focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white">
-          </div>
-
-          <!-- Filter tabs -->
-          <div class="flex gap-1 mb-2">
-            <button type="button" onclick="setLeadFilter('all')" data-filter="all"
-                    class="lead-filter-tab text-[11px] font-semibold px-2.5 py-1 rounded-full border
-                           border-blue-300 bg-blue-50 text-blue-700 transition-colors">
-              All
-            </button>
-            <button type="button" onclick="setLeadFilter('available')" data-filter="available"
-                    class="lead-filter-tab text-[11px] font-medium px-2.5 py-1 rounded-full border
-                           border-slate-200 bg-white text-slate-500 hover:border-blue-200 hover:text-blue-600 transition-colors">
-              Not enrolled
-            </button>
-            <button type="button" onclick="setLeadFilter('enrolled')" data-filter="enrolled"
-                    class="lead-filter-tab text-[11px] font-medium px-2.5 py-1 rounded-full border
-                           border-slate-200 bg-white text-slate-500 hover:border-blue-200 hover:text-blue-600 transition-colors">
-              Already enrolled
-            </button>
-          </div>
-
-          <!-- Lead list -->
-          <div class="max-h-56 overflow-y-auto space-y-0.5 mb-3 pr-0.5" id="lead-list">
-            {% for lead in all_leads %}
-            <label data-enrolled="{{ lead.is_enrolled|yesno:'true,false' }}"
-                   data-search="{{ lead.first_name|lower }} {{ lead.last_name|lower }} {{ lead.company.name|lower|default:'' }} {{ lead.email|lower|default:'' }}"
-                   class="lead-row flex items-center gap-2 text-xs px-2 py-1.5 rounded-lg
-                          {% if lead.is_enrolled %}opacity-60 bg-slate-50 cursor-default{% else %}cursor-pointer hover:bg-slate-50{% endif %}">
-              <input type="checkbox" name="lead_ids" value="{{ lead.id }}"
-                     class="rounded border-slate-300 flex-shrink-0"
-                     {% if lead.is_enrolled %}disabled{% endif %}>
-              <span class="flex-1 min-w-0 truncate">
-                <span class="font-medium text-slate-700">{{ lead.first_name }} {{ lead.last_name }}</span>
-                {% if lead.company %}<span class="text-slate-400"> · {{ lead.company.name }}</span>{% endif %}
-                {% if lead.email %}<span class="text-slate-300 hidden sm:inline"> · {{ lead.email }}</span>{% endif %}
-              </span>
-              {% if lead.is_enrolled %}
-              <span class="flex-shrink-0 text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5
-                           rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100 whitespace-nowrap">
-                In campaign
-              </span>
-              {% endif %}
-            </label>
-            {% empty %}
-            <p class="text-xs text-slate-400 px-2 py-2">No leads found.</p>
-            {% endfor %}
-            <p id="lead-empty-msg" class="hidden text-xs text-slate-400 px-2 py-2">No matches.</p>
-          </div>
-
-          <div class="flex items-center gap-3">
-            <button type="submit"
-                    class="text-xs font-semibold px-3 py-1.5 rounded-lg text-white transition-colors"
-                    style="background:#30B9EF">
-              Enroll Selected
-            </button>
-            <button type="button" id="select-all-leads" onclick="toggleSelectAllLeads()"
-                    class="text-[11px] text-slate-400 hover:text-slate-600 underline">
-              Select all visible
-            </button>
-          </div>
-        </form>
-      </div>
-
-      <!-- Enrolled list -->
-      <div id="enrolled-list">
-        {% include "campaigns/partials/enrolled_list.html" %}
       </div>
     </div>
 
+  </div>
+
+  <!-- ── Enrolled Leads popup ─────────────────────────────────────────────── -->
+  <div id="enrolled-modal-backdrop" class="enrolled-modal-backdrop" onclick="closeEnrolledModal(event)">
+    <div class="enrolled-modal-box">
+      <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100 flex-shrink-0">
+        <h2 class="text-sm font-bold text-slate-700">
+          Enrolled Leads <span class="text-slate-400 font-normal">({{ total_enrolled }})</span>
+        </h2>
+        <div class="flex items-center gap-3">
+          <button type="button" onclick="document.getElementById('add-leads-panel').classList.toggle('hidden')"
+                  class="inline-flex items-center gap-1 text-xs font-semibold text-blue-600
+                         hover:text-blue-700 transition-colors">
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+            </svg>
+            Add Leads
+          </button>
+          <button type="button" onclick="closeEnrolledModal()"
+                  class="text-slate-300 hover:text-slate-500 transition-colors p-1 rounded-lg hover:bg-slate-100">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="px-5 py-4 overflow-y-auto">
+
+        <!-- Add leads panel (hidden) -->
+        <div id="add-leads-panel" class="hidden mb-4 bg-slate-50 border border-slate-200 rounded-xl p-4">
+          <div id="enroll-result" class="mb-2"></div>
+          <form hx-post="/campaigns/{{ campaign.id }}/enroll/"
+                hx-target="#enroll-result"
+                hx-swap="innerHTML">
+            {% csrf_token %}
+
+            <!-- Search input -->
+            <div class="relative mb-2">
+              <svg class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none"
+                   fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
+              </svg>
+              <input type="text" id="lead-search" placeholder="Search name, company or email…"
+                     autocomplete="off" oninput="filterLeads()"
+                     class="w-full text-xs pl-7 pr-3 py-1.5 border border-slate-200 rounded-lg
+                            focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white">
+            </div>
+
+            <!-- Filter tabs -->
+            <div class="flex gap-1 mb-2">
+              <button type="button" onclick="setLeadFilter('all')" data-filter="all"
+                      class="lead-filter-tab text-[11px] font-semibold px-2.5 py-1 rounded-full border
+                             border-blue-300 bg-blue-50 text-blue-700 transition-colors">
+                All
+              </button>
+              <button type="button" onclick="setLeadFilter('available')" data-filter="available"
+                      class="lead-filter-tab text-[11px] font-medium px-2.5 py-1 rounded-full border
+                             border-slate-200 bg-white text-slate-500 hover:border-blue-200 hover:text-blue-600 transition-colors">
+                Not enrolled
+              </button>
+              <button type="button" onclick="setLeadFilter('enrolled')" data-filter="enrolled"
+                      class="lead-filter-tab text-[11px] font-medium px-2.5 py-1 rounded-full border
+                             border-slate-200 bg-white text-slate-500 hover:border-blue-200 hover:text-blue-600 transition-colors">
+                Already enrolled
+              </button>
+            </div>
+
+            <!-- Lead list -->
+            <div class="max-h-56 overflow-y-auto space-y-0.5 mb-3 pr-0.5" id="lead-list">
+              {% for lead in all_leads %}
+              <label data-enrolled="{{ lead.is_enrolled|yesno:'true,false' }}"
+                     data-search="{{ lead.first_name|lower }} {{ lead.last_name|lower }} {{ lead.company.name|lower|default:'' }} {{ lead.email|lower|default:'' }}"
+                     class="lead-row flex items-center gap-2 text-xs px-2 py-1.5 rounded-lg
+                            {% if lead.is_enrolled %}opacity-60 bg-slate-50 cursor-default{% else %}cursor-pointer hover:bg-white{% endif %}">
+                <input type="checkbox" name="lead_ids" value="{{ lead.id }}"
+                       class="rounded border-slate-300 flex-shrink-0"
+                       {% if lead.is_enrolled %}disabled{% endif %}>
+                <span class="flex-1 min-w-0 truncate">
+                  <span class="font-medium text-slate-700">{{ lead.first_name }} {{ lead.last_name }}</span>
+                  {% if lead.company %}<span class="text-slate-400"> · {{ lead.company.name }}</span>{% endif %}
+                  {% if lead.email %}<span class="text-slate-300 hidden sm:inline"> · {{ lead.email }}</span>{% endif %}
+                </span>
+                {% if lead.is_enrolled %}
+                <span class="flex-shrink-0 text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5
+                             rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100 whitespace-nowrap">
+                  In campaign
+                </span>
+                {% endif %}
+              </label>
+              {% empty %}
+              <p class="text-xs text-slate-400 px-2 py-2">No leads found.</p>
+              {% endfor %}
+              <p id="lead-empty-msg" class="hidden text-xs text-slate-400 px-2 py-2">No matches.</p>
+            </div>
+
+            <div class="flex items-center gap-3">
+              <button type="submit"
+                      class="text-xs font-semibold px-3 py-1.5 rounded-lg text-white transition-colors"
+                      style="background:#30B9EF">
+                Enroll Selected
+              </button>
+              <button type="button" id="select-all-leads" onclick="toggleSelectAllLeads()"
+                      class="text-[11px] text-slate-400 hover:text-slate-600 underline">
+                Select all visible
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Enrolled list -->
+        <div id="enrolled-list">
+          {% include "campaigns/partials/enrolled_list.html" %}
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- ── Activity Log ─────────────────────────────────────────────────────── -->
@@ -477,6 +513,22 @@ document.addEventListener('click', function(e) {
 function toggleStepMenu(id) {
   document.getElementById('step-dropdown-' + id).classList.toggle('hidden');
 }
+
+function toggleReschedulePanel(id) {
+  var panel = document.getElementById('step-reschedule-panel-' + id);
+  if (panel) panel.classList.toggle('hidden');
+}
+
+// ── Enrolled Leads popup ─────────────────────────────────────────────────────
+function openEnrolledModal() {
+  document.getElementById('enrolled-modal-backdrop').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeEnrolledModal(e) {
+  if (e && e.target !== document.getElementById('enrolled-modal-backdrop')) return;
+  document.getElementById('enrolled-modal-backdrop').classList.remove('open');
+  document.body.style.overflow = '';
+}
 document.addEventListener('click', function(e) {
   document.querySelectorAll('[id^="step-dropdown-"]').forEach(function(el) {
     var wrap = el.closest('[id^="step-menu-"]');
@@ -507,6 +559,30 @@ function toggleStepBody(id) {
   border-color: #30B9EF;
   color: #29307C;
   font-weight: 600;
+}
+.enrolled-modal-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(20,24,70,0.45);
+  z-index: 190;
+  backdrop-filter: blur(2px);
+}
+.enrolled-modal-backdrop.open {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.enrolled-modal-box {
+  background: #fff;
+  border-radius: 16px;
+  width: 720px;
+  max-width: 96vw;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.22);
 }
 </style>
 {% endblock %}

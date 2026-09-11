@@ -1,0 +1,58 @@
+<form method="POST"
+      action="/campaigns/{{ campaign.id }}/steps/{{ step.id }}/edit/"
+      class="bg-indigo-50 border border-indigo-100 rounded-xl p-3 space-y-2 mt-2">
+  {% csrf_token %}
+  <p class="text-[11px] font-bold text-indigo-700 uppercase tracking-wide">
+    Modify Step {{ step.step_number }}
+  </p>
+
+  <div>
+    <label class="block text-[11px] font-semibold text-slate-500 mb-1">Label <span class="font-normal text-slate-400">(optional)</span></label>
+    <input type="text" name="label" value="{{ step.label }}"
+           class="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white
+                  focus:outline-none focus:ring-2 focus:ring-indigo-300">
+  </div>
+
+  <div>
+    <label class="block text-[11px] font-semibold text-slate-500 mb-1">Schedule</label>
+    <input type="datetime-local" name="scheduled_at"
+           value="{{ step.scheduled_at|date:'Y-m-d\TH:i' }}"
+           class="text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white
+                  focus:outline-none focus:ring-2 focus:ring-indigo-300">
+  </div>
+
+  {% if step.step_type == 'email' %}
+  <div>
+    <label class="block text-[11px] font-semibold text-slate-500 mb-1">Subject</label>
+    <input type="text" name="subject_template" value="{{ step.subject_template }}"
+           class="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white
+                  focus:outline-none focus:ring-2 focus:ring-indigo-300">
+  </div>
+  <div>
+    <label class="block text-[11px] font-semibold text-slate-500 mb-1">Body</label>
+    <textarea name="body_html_template" rows="5"
+              class="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white
+                     resize-none focus:outline-none focus:ring-2 focus:ring-indigo-300">{{ step.body_html_template }}</textarea>
+  </div>
+  {% else %}
+  <div>
+    <label class="block text-[11px] font-semibold text-slate-500 mb-1">What to do</label>
+    <textarea name="task_description" rows="3"
+              class="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white
+                     resize-none focus:outline-none focus:ring-2 focus:ring-indigo-300">{{ step.task_description }}</textarea>
+  </div>
+  {% endif %}
+
+  <div class="flex items-center gap-2 pt-1">
+    <button type="submit"
+            class="text-xs font-semibold px-3 py-1.5 rounded-lg text-white transition-colors"
+            style="background:#30B9EF">
+      Save Changes
+    </button>
+    <button type="button"
+            onclick="var t=document.getElementById('step-edit-target-{{ step.id }}'); t.classList.add('hidden'); t.innerHTML='';"
+            class="text-xs text-slate-400 hover:text-slate-600">
+      Cancel
+    </button>
+  </div>
+</form>

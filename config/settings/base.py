@@ -108,6 +108,11 @@ DATABASES = {
     }
 }
 
+# ── Read-only external integrations API (e.g. Claude Cowork) ──────────────────
+# Static key sent as the X-API-Key header on /api/v1/leads/ requests.
+# Leave unset to disable the endpoint (it fails closed with no key configured).
+LEADS_API_KEY = env("LEADS_API_KEY", default="")
+
 # ── Internationalisation ──────────────────────────────────────────────────────
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "Asia/Kolkata"
