@@ -20,6 +20,10 @@ _PUBLIC_PREFIXES = (
     "/favicon.ico",
     "/email-pixel/",       # Pipeline email tracking pixel
     "/campaigns/pixel/",   # Campaign email tracking pixel
+    "/api/v1/leads/",      # Server-to-server leads API — authenticates itself
+                           # via the X-API-Key header check in apps.leads.api;
+                           # deliberately scoped, not the whole /api/v1/ tree,
+                           # so future routes there aren't exposed by accident.
 )
 
 # Media sub-paths safe to serve publicly (avatars, logos, etc.)
